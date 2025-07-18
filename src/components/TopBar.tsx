@@ -44,13 +44,17 @@ export default function TopBar() {
           title="Om Kvasir!"
         >
           <p>
-            Kvasir er en moderne nyhetsleser som samler de viktigste avisene på ett sted. Her kan du enkelt finne, lese og følge med på nyheter som betyr noe for deg.
+            <b>Kvasir</b> er et analyseverktøy for norske politikeres omtale i utvalgte nettaviser. Prosjektet samler inn og analyserer artikler fra VG, NRK, E24 og flere, og gir deg innsikt i hvilke kandidater og partier som får mest oppmerksomhet i mediene.
           </p>
           <ul>
-            <li>• Få oversikt over flere aviser</li>
-            <li>• Personlig tilpasset feed</li>
-            <li>• Rask og brukervennlig opplevelse</li>
+            <li>• Se hvilke partier som omtales mest</li>
+            <li>• Utforsk de mest omtalte kandidatene</li>
+            <li>• Fordeling på kjønn, alder og valgdistrikt</li>
+            <li>• Data oppdateres hver tredje time og hentes direkte fra avisene</li>
           </ul>
+          <p className="mt-4 text-sm">
+            All data hentes og analyseres automatisk.
+          </p>
         </Modal>
       </div>
     </div>
