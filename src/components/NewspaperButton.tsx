@@ -5,16 +5,13 @@ interface NewspaperButtonProps {
   imageSrc: string;
   name: string;
   alt?: string;
+  onClick?: () => void;
 }
 
-export default function NewspaperButton({ imageSrc, name, alt }: NewspaperButtonProps) {
-  const handleClick = () => {
-    console.log("hello verden");
-  };
-
+export default function NewspaperButton({ imageSrc, name, alt, onClick }: NewspaperButtonProps) {
   return (
     <button
-      onClick={handleClick}
+      onClick={onClick}
       className="group w-full p-4 flex items-center gap-3 text-left bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-200 hover:shadow-md"
     >
       <div className="relative flex-shrink-0 w-12 h-12 overflow-hidden rounded-md">
