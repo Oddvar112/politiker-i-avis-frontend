@@ -65,7 +65,7 @@ class KvasirApiService {
    */
   async healthCheck(): Promise<boolean> {
     try {
-      await this.fetchApi<any>('/api/analyse/alt');
+      await this.fetchApi<unknown>('/api/analyse/alt');
       return true;
     } catch {
       return false;
