@@ -1,22 +1,50 @@
-// Robust rate limiter for Microlink API
+// Mer robust rate limiter for Microlink API
 class MicrolinkRateLimit {
   private static queue: (() => void)[] = [];
   private static active = 0;
-  private static maxConcurrent = 1;
-  private static delay = 0; // ms, ingen ekstra ventetid mellom
+  private static maxConcurrent = 1; // Kun 1 om gangen
+  private static delay = 2000; // 2 sekunder mellom hver request
+  private static lastRequestTime = 0;
+  private static failedRequests = 0;
+  private static backoffMultiplier = 1;
 
   static enqueue(task: () => Promise<void>) {
     return new Promise<void>((resolve) => {
       const run = async () => {
+        // Vent til vi kan gjøre neste request
+        const now = Date.now();
+        const timeSinceLastRequest = now - MicrolinkRateLimit.lastRequestTime;
+        const requiredDelay = MicrolinkRateLimit.delay * MicrolinkRateLimit.backoffMultiplier;
+        
+        if (timeSinceLastRequest < requiredDelay) {
+          await new Promise(resolve => 
+            setTimeout(resolve, requiredDelay - timeSinceLastRequest)
+          );
+        }
+
         MicrolinkRateLimit.active++;
+        MicrolinkRateLimit.lastRequestTime = Date.now();
+        
         try {
           await task();
+          // Reset backoff ved suksess
+          MicrolinkRateLimit.failedRequests = 0;
+          MicrolinkRateLimit.backoffMultiplier = 1;
+        } catch (error) {
+          // Øk backoff ved feil
+          MicrolinkRateLimit.failedRequests++;
+          if (MicrolinkRateLimit.failedRequests > 3) {
+            MicrolinkRateLimit.backoffMultiplier = Math.min(8, MicrolinkRateLimit.backoffMultiplier * 2);
+          }
+          throw error;
         } finally {
           MicrolinkRateLimit.active--;
-          MicrolinkRateLimit.next();
+          // Vent litt før neste request
+          setTimeout(() => MicrolinkRateLimit.next(), 500);
           resolve();
         }
       };
+      
       MicrolinkRateLimit.queue.push(run);
       MicrolinkRateLimit.next();
     });
@@ -28,7 +56,16 @@ class MicrolinkRateLimit {
       if (nextTask) nextTask();
     }
   }
+
+  // Reset rate limiter hvis vi har for mange feil
+  static reset() {
+    MicrolinkRateLimit.queue = [];
+    MicrolinkRateLimit.active = 0;
+    MicrolinkRateLimit.failedRequests = 0;
+    MicrolinkRateLimit.backoffMultiplier = 1;
+  }
 }
+
 import { DataDTO } from "@/types/api";
 import { useState, useEffect } from "react";
 import React from "react";
@@ -42,6 +79,7 @@ interface DataDisplayProps {
 interface ArticlePreviewProps {
   url: string;
   active: boolean;
+  priority: number; // Lavere tall = høyere prioritet
 }
 
 // Type definition for Microlink component
@@ -58,7 +96,7 @@ interface MicrolinkProps {
 
 type MicrolinkComponent = React.ComponentType<MicrolinkProps>;
 
-function ArticlePreview({ url, active }: ArticlePreviewProps) {
+function ArticlePreview({ url, active, priority }: ArticlePreviewProps) {
   const [MicrolinkComponent, setMicrolinkComponent] = useState<MicrolinkComponent | null>(null);
   const [showFullPreview, setShowFullPreview] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
@@ -66,6 +104,8 @@ function ArticlePreview({ url, active }: ArticlePreviewProps) {
   const [microlinkLoaded, setMicrolinkLoaded] = useState(false);
   const [shouldAttemptLoad, setShouldAttemptLoad] = useState(false);
   const [showWarning, setShowWarning] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const maxRetries = 2;
 
   // Ekstraher domene for å vise umiddelbart
   const getDomainInfo = (url: string) => {
@@ -112,53 +152,86 @@ function ArticlePreview({ url, active }: ArticlePreviewProps) {
 
   const domainInfo = getDomainInfo(url);
 
-  // Start forsinket load for å spre requests, men kun hvis aktiv
+  // Start forsinket load basert på prioritet og kun hvis aktiv
   useEffect(() => {
     if (!active) {
       setShouldAttemptLoad(false);
+      setMicrolinkFailed(false);
+      setShowWarning(false);
+      setRetryCount(0);
       return;
     }
+    
+    // Prioritet-basert delay: høyere prioritet = kortere delay
+    const baseDelay = 3000; // 3 sekunder base delay
+    const priorityDelay = priority * 2000; // 2 sekunder per prioritet
+    const randomJitter = Math.random() * 1000; // 0-1 sek tilfeldig
+    
     const timer = setTimeout(() => {
       setShouldAttemptLoad(true);
-    }, Math.random() * 8000); // 0-8 sek delay
+    }, baseDelay + priorityDelay + randomJitter);
+    
     return () => clearTimeout(timer);
-  }, [active]);
+  }, [active, priority]);
+
+  // Retry-funksjon
+  const attemptLoad = async () => {
+    setIsInitialLoad(true);
+    setMicrolinkFailed(false);
+    setShowWarning(false);
+    
+    try {
+      await MicrolinkRateLimit.enqueue(async () => {
+        const microlinkModule = await import('@microlink/react');
+        setMicrolinkComponent(() => microlinkModule.default as MicrolinkComponent);
+      });
+    } catch (error) {
+      console.warn(`Microlink loading failed for ${url} (attempt ${retryCount + 1}):`, error);
+      
+      if (retryCount < maxRetries) {
+        // Retry med eksponentiell backoff
+        const retryDelay = Math.pow(2, retryCount) * 5000; // 5s, 10s, 20s
+        setTimeout(() => {
+          setRetryCount(prev => prev + 1);
+        }, retryDelay);
+      } else {
+        setMicrolinkFailed(true);
+        setShowWarning(true);
+      }
+    } finally {
+      setIsInitialLoad(false);
+    }
+  };
 
   // Last inn Microlink med rate limit når vi skal prøve
   useEffect(() => {
     if (!shouldAttemptLoad) return;
-    let cancelled = false;
-    setIsInitialLoad(true);
-    setMicrolinkFailed(false);
-    setShowWarning(false);
-    MicrolinkRateLimit.enqueue(async () => {
-      try {
-        const microlinkModule = await import('@microlink/react');
-        if (!cancelled) {
-          setMicrolinkComponent(() => microlinkModule.default as MicrolinkComponent);
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setMicrolinkFailed(true);
-          setShowWarning(true);
-        }
-      } finally {
-        if (!cancelled) setIsInitialLoad(false);
-      }
-    });
-    return () => { cancelled = true; };
-  }, [shouldAttemptLoad]);
+    attemptLoad();
+  }, [shouldAttemptLoad, retryCount]);
 
-  // Error handler
+  // Error handler med bedre retry-logikk
   const handleError = (error: Error | unknown) => {
-    console.warn('Microlink feilet for', url, error);
-    setMicrolinkFailed(true);
-    setShowWarning(true);
+    console.warn('Microlink preview failed for', url, error);
+    
+    // Sjekk om det er en rate limit error
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const isRateLimit = errorMessage.includes('429') || errorMessage.includes('439') || errorMessage.includes('rate');
+    
+    if (isRateLimit && retryCount < maxRetries) {
+      // Retry ved rate limit
+      const retryDelay = Math.pow(2, retryCount) * 10000; // 10s, 20s, 40s for rate limits
+      setTimeout(() => {
+        setRetryCount(prev => prev + 1);
+        setMicrolinkFailed(false);
+      }, retryDelay);
+    } else {
+      setMicrolinkFailed(true);
+      setShowWarning(true);
+    }
   };
 
   // Load handler
   const handleLoad = () => {
-    // Bytt til full preview når den er lastet
     setMicrolinkLoaded(true);
     setTimeout(() => setShowFullPreview(true), 500);
   };
@@ -203,14 +276,26 @@ function ArticlePreview({ url, active }: ArticlePreviewProps) {
             </div>
           </div>
         )}
+        
         {/* Loading-indikator kun hvis vi faktisk prøver å laste */}
         {isInitialLoad && (
-          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-gray-500 dark:text-gray-400 hidden sm:block">Laster...</div>
+          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-gray-500 dark:text-gray-400 hidden sm:block">
+            {retryCount > 0 ? `Prøver igjen... (${retryCount + 1}/${maxRetries + 1})` : 'Laster...'}
+          </div>
         )}
-        {/* Gul warning ved feil */}
+        
+        {/* Warning ved feil */}
         {showWarning && (
           <div className="absolute top-1 right-1 z-30">
-            <div className="w-3 h-3 bg-yellow-400 rounded-full border-2 border-yellow-600 animate-pulse" title="Forhåndsvisning feilet"></div>
+            <div className="w-3 h-3 bg-yellow-400 rounded-full border-2 border-yellow-600 animate-pulse" 
+                 title={`Forhåndsvisning feilet${retryCount > 0 ? ` etter ${retryCount + 1} forsøk` : ''}`}></div>
+          </div>
+        )}
+        
+        {/* Retry indicator */}
+        {retryCount > 0 && !microlinkFailed && (
+          <div className="absolute bottom-1 left-1 z-30">
+            <div className="w-2 h-2 bg-orange-400 rounded-full animate-pulse" title="Prøver igjen..."></div>
           </div>
         )}
       </div>
@@ -299,6 +384,11 @@ export default function DataDisplay({ data, isLoading, error }: DataDisplayProps
   const [showAllCandidates, setShowAllCandidates] = useState(false);
   const [expandedCandidate, setExpandedCandidate] = useState<string | null>(null);
 
+  // Reset rate limiter når komponenten mountes
+  useEffect(() => {
+    MicrolinkRateLimit.reset();
+  }, []);
+
   if (isLoading) {
     return (
       <div className="py-6 sm:py-8">
@@ -353,6 +443,10 @@ export default function DataDisplay({ data, isLoading, error }: DataDisplayProps
   const displayedPersoner = showAllCandidates ? sortedPersoner : sortedPersoner.slice(0, 10);
 
   const toggleExpandCandidate = (candidateName: string) => {
+    // Reset rate limiter når vi skifter kandidat
+    if (expandedCandidate !== candidateName) {
+      MicrolinkRateLimit.reset();
+    }
     setExpandedCandidate(expandedCandidate === candidateName ? null : candidateName);
   };
 
@@ -489,8 +583,12 @@ export default function DataDisplay({ data, isLoading, error }: DataDisplayProps
                           {linkIndex + 1}.
                         </span>
                         
-                        {/* Preview bilde til venstre */}
-                        <ArticlePreview url={lenke} active={expandedCandidate === person.navn} />
+                        {/* Preview bilde til venstre - med prioritet */}
+                        <ArticlePreview 
+                          url={lenke} 
+                          active={expandedCandidate === person.navn} 
+                          priority={linkIndex} 
+                        />
                         
                         {/* Lenke til høyre */}
                         <div className="flex-1 min-w-0">
