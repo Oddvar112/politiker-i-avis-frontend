@@ -1,3 +1,65 @@
+/* Legg til i bunnen av din eksisterende globals.css */
+
+/* Responsiv utilities */
+@media (max-width: 1023px) {
+  /* Mobilforbedringer */
+  .mobile-optimized {
+    font-size: 14px;
+  }
+  
+  /* Bedre touch targets */
+  button, a, [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+@media (min-width: 1536px) {
+  /* 2XL og større skjermer */
+  .ultra-wide-content {
+    max-width: none;
+  }
+}
+
+/* Forbedret scrolling for mobil */
+@supports (-webkit-overflow-scrolling: touch) {
+  .sidebar-scrollbar {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Sikre at text ikke blir for lite på små skjermer */
+@media (max-width: 640px) {
+  html {
+    font-size: 16px; /* Forhindrer zoom på iOS */
+  }
+  
+  input, textarea, select {
+    font-size: 16px; /* Forhindrer zoom på iOS */
+  }
+}
+
+/* Forbedret focus states for keyboard navigation */
+.focus-visible:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Animasjon for fade-in modal */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out;
+}
 @import "tailwindcss";
 
 :root {
