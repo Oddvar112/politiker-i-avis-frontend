@@ -1,5 +1,6 @@
 import { DataDTO } from "@/types/api";
 import { useState, useEffect } from "react";
+import React from "react";
 
 interface DataDisplayProps {
   data: DataDTO | null;
@@ -11,23 +12,67 @@ interface ArticlePreviewProps {
   url: string;
 }
 
+// Type definition for Microlink component
+interface MicrolinkProps {
+  url: string;
+  size?: 'small' | 'large';
+  media?: 'logo' | 'image';
+  contrast?: string | boolean;
+  lazy?: boolean;
+  style?: React.CSSProperties;
+  onError?: (error: Error | unknown) => void;
+  onLoad?: () => void;
+}
+
+type MicrolinkComponent = React.ComponentType<MicrolinkProps>;
+
 function ArticlePreview({ url }: ArticlePreviewProps) {
-  const [MicrolinkComponent, setMicrolinkComponent] = useState<any>(null);
+  const [MicrolinkComponent, setMicrolinkComponent] = useState<MicrolinkComponent | null>(null);
   const [showFullPreview, setShowFullPreview] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [microlinkFailed, setMicrolinkFailed] = useState(false);
+  const [microlinkLoaded, setMicrolinkLoaded] = useState(false);
 
   // Ekstraher domene for å vise umiddelbart
   const getDomainInfo = (url: string) => {
     try {
       const domain = new URL(url).hostname.toLowerCase();
-      if (domain.includes('vg.no')) return { name: 'VG', color: 'bg-red-600' };
-      if (domain.includes('nrk.no')) return { name: 'NRK', color: 'bg-blue-600' };
-      if (domain.includes('e24.no')) return { name: 'E24', color: 'bg-green-600' };
-      if (domain.includes('aftenposten.no')) return { name: 'AP', color: 'bg-gray-700' };
-      if (domain.includes('dagbladet.no')) return { name: 'DB', color: 'bg-red-500' };
-      return { name: domain.substring(0, 3).toUpperCase(), color: 'bg-blue-500' };
+      if (domain.includes('vg.no')) return { 
+        name: 'VG', 
+        color: 'bg-red-600',
+        logo: '/bilder/vg.png'
+      };
+      if (domain.includes('nrk.no')) return { 
+        name: 'NRK', 
+        color: 'bg-blue-600',
+        logo: '/bilder/NRK.png'
+      };
+      if (domain.includes('e24.no')) return { 
+        name: 'E24', 
+        color: 'bg-green-600',
+        logo: '/bilder/E42.png'
+      };
+      if (domain.includes('aftenposten.no')) return { 
+        name: 'AP', 
+        color: 'bg-gray-700',
+        logo: null
+      };
+      if (domain.includes('dagbladet.no')) return { 
+        name: 'DB', 
+        color: 'bg-red-500',
+        logo: null
+      };
+      return { 
+        name: domain.substring(0, 3).toUpperCase(), 
+        color: 'bg-blue-500',
+        logo: null
+      };
     } catch {
-      return { name: '?', color: 'bg-gray-500' };
+      return { 
+        name: '?', 
+        color: 'bg-gray-500',
+        logo: null
+      };
     }
   };
 
@@ -37,8 +82,8 @@ function ArticlePreview({ url }: ArticlePreviewProps) {
   useEffect(() => {
     const loadMicrolink = async () => {
       try {
-        const module = await import('@microlink/react');
-        setMicrolinkComponent(() => module.default);
+        const microlinkModule = await import('@microlink/react');
+        setMicrolinkComponent(() => microlinkModule.default as MicrolinkComponent);
         setIsInitialLoad(false);
       } catch (error) {
         console.warn('Kunne ikke laste @microlink/react:', error);
@@ -49,61 +94,112 @@ function ArticlePreview({ url }: ArticlePreviewProps) {
     loadMicrolink();
   }, []);
 
-  // Hvis komponenten ikke er lastet ennå, vis en pen domain-indikator
-  if (isInitialLoad || !MicrolinkComponent) {
+  // Error handler
+  const handleError = (error: Error | unknown) => {
+    console.warn('Microlink feilet for', url, error);
+    setMicrolinkFailed(true);
+  };
+
+  // Load handler
+  const handleLoad = () => {
+    // Bytt til full preview når den er lastet
+    setMicrolinkLoaded(true);
+    setTimeout(() => setShowFullPreview(true), 500);
+  };
+
+  // Hvis komponenten ikke er lastet ennå eller Microlink feilet, vis avis-logo fallback
+  if (isInitialLoad || !MicrolinkComponent || microlinkFailed) {
     return (
-      <div className="w-20 sm:w-32 h-16 sm:h-20 flex-shrink-0 bg-gray-50 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center">
-        <div className={`w-6 h-6 sm:w-8 sm:h-8 ${domainInfo.color} rounded-full flex items-center justify-center text-white text-xs font-bold mb-1`}>
-          {domainInfo.name}
-        </div>
-        <div className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">Laster...</div>
+      <div className="w-20 sm:w-32 h-16 sm:h-20 flex-shrink-0 bg-gray-50 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center overflow-hidden">
+        {domainInfo.logo ? (
+          <img 
+            src={domainInfo.logo} 
+            alt={`${domainInfo.name} logo`}
+            className="w-full h-full object-cover"
+            style={{ objectFit: 'cover', width: '100%', height: '100%' }}
+          />
+        ) : (
+          <>
+            <div className={`w-6 h-6 sm:w-8 sm:h-8 ${domainInfo.color} rounded-full flex items-center justify-center text-white text-xs font-bold mb-1`}>
+              {domainInfo.name}
+            </div>
+            {isInitialLoad && (
+              <div className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">Laster...</div>
+            )}
+          </>
+        )}
       </div>
     );
   }
 
   return (
-    <div className="w-20 sm:w-32 h-16 sm:h-20 flex-shrink-0 relative">
-      {/* Logo som vises først */}
-      <div className={`absolute inset-0 transition-opacity duration-300 ${showFullPreview ? 'opacity-0' : 'opacity-100'}`}>
-        <MicrolinkComponent
-          url={url}
-          size="small"
-          media="logo"
-          lazy={false}
-          style={{
-            width: '100%',
-            height: '100%',
-            fontSize: '10px',
-            border: 'none'
-          }}
-          onError={(error: any) => {
-            console.warn('Microlink logo feilet for', url, error);
-          }}
-        />
+    <div className="w-24 h-16 sm:w-28 sm:h-20 flex-shrink-0 relative bg-gray-50 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 overflow-hidden">
+      {/* Avis-logo bakgrunn - ALLTID synlig til Microlink laster */}
+      <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-500 z-0 ${microlinkLoaded && !microlinkFailed ? 'opacity-15' : 'opacity-100'}`}>
+        {domainInfo.logo ? (
+          <img 
+            src={domainInfo.logo} 
+            alt={`${domainInfo.name} logo`}
+            className="w-full h-full object-cover"
+            style={{ objectFit: 'cover', width: '100%', height: '100%' }}
+          />
+        ) : (
+          <div className={`w-6 h-6 sm:w-8 sm:h-8 ${domainInfo.color} rounded-full flex items-center justify-center text-white text-xs font-bold`}>
+            {domainInfo.name}
+          </div>
+        )}
       </div>
 
-      {/* Full preview som laster i bakgrunnen */}
-      <div className={`absolute inset-0 transition-opacity duration-300 ${showFullPreview ? 'opacity-100' : 'opacity-0'}`}>
-        <MicrolinkComponent
-          url={url}
-          size="small"
-          contrast="true"
-          lazy={false}
-          style={{
-            width: '100%',
-            height: '100%',
-            fontSize: '10px',
-            border: 'none'
-          }}
-          onLoad={() => {
-            // Bytt til full preview når den er lastet
-            setTimeout(() => setShowFullPreview(true), 500);
-          }}
-          onError={(error: any) => {
-            console.warn('Microlink preview feilet for', url, error);
-          }}
-        />
-      </div>
+      {/* Microlink innhold - kun synlig når det faktisk laster */}
+      {MicrolinkComponent && !microlinkFailed && (
+        <>
+          {/* Logo preview */}
+          <div className={`absolute inset-0 z-10 transition-opacity duration-300 ${showFullPreview ? 'opacity-0' : 'opacity-100'}`}>
+          <MicrolinkComponent
+            url={url}
+            size="small"
+            media="logo"
+            lazy={false}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              fontSize: '10px',
+              border: 'none',
+              backgroundColor: 'transparent'
+            }}
+            onError={handleError}
+          />
+          </div>
+
+          {/* Full preview */}
+          <div className={`absolute inset-0 z-20 transition-opacity duration-300 ${showFullPreview ? 'opacity-100' : 'opacity-0'}`}>
+          <MicrolinkComponent
+            url={url}
+            size="small"
+            contrast="true"
+            lazy={false}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              fontSize: '10px',
+              border: 'none',
+              backgroundColor: 'transparent'
+            }}
+            onLoad={handleLoad}
+            onError={handleError}
+          />
+          </div>
+        </>
+      )}
+
+      {/* Loading indikator for kjente aviser */}
+      {(isInitialLoad || (!microlinkLoaded && !microlinkFailed)) && domainInfo.logo && (
+        <div className="absolute bottom-1 right-1 z-30">
+          <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+        </div>
+      )}
     </div>
   );
 }
