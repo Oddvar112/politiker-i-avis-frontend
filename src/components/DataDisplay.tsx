@@ -1,3 +1,36 @@
+// Robust rate limiter for Microlink API
+class MicrolinkRateLimit {
+  private static queue: (() => void)[] = [];
+  private static active = 0;
+  private static maxConcurrent = 2;
+  private static delay = 1000; // ms
+
+  static enqueue(task: () => Promise<void>) {
+    return new Promise<void>((resolve) => {
+      const run = async () => {
+        MicrolinkRateLimit.active++;
+        try {
+          await task();
+        } finally {
+          MicrolinkRateLimit.active--;
+          setTimeout(() => {
+            MicrolinkRateLimit.next();
+          }, MicrolinkRateLimit.delay);
+          resolve();
+        }
+      };
+      MicrolinkRateLimit.queue.push(run);
+      MicrolinkRateLimit.next();
+    });
+  }
+
+  private static next() {
+    if (MicrolinkRateLimit.active < MicrolinkRateLimit.maxConcurrent && MicrolinkRateLimit.queue.length > 0) {
+      const nextTask = MicrolinkRateLimit.queue.shift();
+      if (nextTask) nextTask();
+    }
+  }
+}
 import { DataDTO } from "@/types/api";
 import { useState, useEffect } from "react";
 import React from "react";
@@ -32,6 +65,8 @@ function ArticlePreview({ url }: ArticlePreviewProps) {
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [microlinkFailed, setMicrolinkFailed] = useState(false);
   const [microlinkLoaded, setMicrolinkLoaded] = useState(false);
+  const [shouldAttemptLoad, setShouldAttemptLoad] = useState(false);
+  const [showWarning, setShowWarning] = useState(false);
 
   // Ekstraher domene for å vise umiddelbart
   const getDomainInfo = (url: string) => {
@@ -78,26 +113,44 @@ function ArticlePreview({ url }: ArticlePreviewProps) {
 
   const domainInfo = getDomainInfo(url);
 
-  // Last inn Microlink når komponenten mounter
+  // Start forsinket load for å spre requests
   useEffect(() => {
-    const loadMicrolink = async () => {
+    const timer = setTimeout(() => {
+      setShouldAttemptLoad(true);
+    }, Math.random() * 2000); // 0-2 sek delay
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Last inn Microlink med rate limit når vi skal prøve
+  useEffect(() => {
+    if (!shouldAttemptLoad) return;
+    let cancelled = false;
+    setIsInitialLoad(true);
+    setMicrolinkFailed(false);
+    setShowWarning(false);
+    MicrolinkRateLimit.enqueue(async () => {
       try {
         const microlinkModule = await import('@microlink/react');
-        setMicrolinkComponent(() => microlinkModule.default as MicrolinkComponent);
-        setIsInitialLoad(false);
+        if (!cancelled) {
+          setMicrolinkComponent(() => microlinkModule.default as MicrolinkComponent);
+        }
       } catch (error) {
-        console.warn('Kunne ikke laste @microlink/react:', error);
-        setIsInitialLoad(false);
+        if (!cancelled) {
+          setMicrolinkFailed(true);
+          setShowWarning(true);
+        }
+      } finally {
+        if (!cancelled) setIsInitialLoad(false);
       }
-    };
-    
-    loadMicrolink();
-  }, []);
+    });
+    return () => { cancelled = true; };
+  }, [shouldAttemptLoad]);
 
   // Error handler
   const handleError = (error: Error | unknown) => {
     console.warn('Microlink feilet for', url, error);
     setMicrolinkFailed(true);
+    setShowWarning(true);
   };
 
   // Load handler
@@ -107,10 +160,10 @@ function ArticlePreview({ url }: ArticlePreviewProps) {
     setTimeout(() => setShowFullPreview(true), 500);
   };
 
-  // Hvis komponenten ikke er lastet ennå eller Microlink feilet, vis avis-logo fallback
-  if (isInitialLoad || !MicrolinkComponent || microlinkFailed) {
+  // Hvis vi ikke prøver å laste, vis kun logo
+  if (!shouldAttemptLoad) {
     return (
-      <div className="w-20 sm:w-32 h-16 sm:h-20 flex-shrink-0 bg-gray-50 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center overflow-hidden p-0">
+      <div className="w-20 sm:w-32 h-16 sm:h-20 flex-shrink-0 bg-gray-50 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 overflow-hidden p-0 flex items-center justify-center">
         {domainInfo.logo ? (
           <img 
             src={domainInfo.logo} 
@@ -119,16 +172,43 @@ function ArticlePreview({ url }: ArticlePreviewProps) {
             style={{ objectFit: 'cover', width: '100%', height: '100%' }}
           />
         ) : (
-          <>
-            <div className={`w-full h-full flex items-center justify-center`}>
-              <div className={`w-10 h-10 sm:w-14 sm:h-14 ${domainInfo.color} rounded-full flex items-center justify-center text-white text-lg font-bold`}>
-                {domainInfo.name}
-              </div>
+          <div className="w-full h-full flex items-center justify-center">
+            <div className={`w-10 h-10 sm:w-14 sm:h-14 ${domainInfo.color} rounded-full flex items-center justify-center text-white text-lg font-bold`}>
+              {domainInfo.name}
             </div>
-            {isInitialLoad && (
-              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-gray-500 dark:text-gray-400 hidden sm:block">Laster...</div>
-            )}
-          </>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Hvis komponenten ikke er lastet ennå eller Microlink feilet, vis avis-logo fallback og evt warning
+  if (isInitialLoad || !MicrolinkComponent || microlinkFailed) {
+    return (
+      <div className="w-20 sm:w-32 h-16 sm:h-20 flex-shrink-0 bg-gray-50 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 overflow-hidden p-0 flex items-center justify-center relative">
+        {domainInfo.logo ? (
+          <img 
+            src={domainInfo.logo} 
+            alt={`${domainInfo.name} logo`}
+            className="w-full h-full object-cover"
+            style={{ objectFit: 'cover', width: '100%', height: '100%' }}
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <div className={`w-10 h-10 sm:w-14 sm:h-14 ${domainInfo.color} rounded-full flex items-center justify-center text-white text-lg font-bold`}>
+              {domainInfo.name}
+            </div>
+          </div>
+        )}
+        {/* Loading-indikator kun hvis vi faktisk prøver å laste */}
+        {isInitialLoad && (
+          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-gray-500 dark:text-gray-400 hidden sm:block">Laster...</div>
+        )}
+        {/* Gul warning ved feil */}
+        {showWarning && (
+          <div className="absolute top-1 right-1 z-30">
+            <div className="w-3 h-3 bg-yellow-400 rounded-full border-2 border-yellow-600 animate-pulse" title="Forhåndsvisning feilet"></div>
+          </div>
         )}
       </div>
     );
