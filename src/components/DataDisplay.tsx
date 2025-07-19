@@ -2,8 +2,8 @@
 class MicrolinkRateLimit {
   private static queue: (() => void)[] = [];
   private static active = 0;
-  private static maxConcurrent = 2;
-  private static delay = 5000; // ms
+  private static maxConcurrent = 1;
+  private static delay = 0; // ms, ingen ekstra ventetid mellom
 
   static enqueue(task: () => Promise<void>) {
     return new Promise<void>((resolve) => {
@@ -13,9 +13,7 @@ class MicrolinkRateLimit {
           await task();
         } finally {
           MicrolinkRateLimit.active--;
-          setTimeout(() => {
-            MicrolinkRateLimit.next();
-          }, MicrolinkRateLimit.delay);
+          MicrolinkRateLimit.next();
           resolve();
         }
       };
