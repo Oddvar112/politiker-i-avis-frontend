@@ -1,90 +1,4 @@
 // Meget streng rate limiter - kun en request om gangen globalt
-class MicrolinkRateLimit {
-  private static queue: (() => void)[] = [];
-  private static active = false;
-  private static delay = 5000; // 5 sekunder mellom hver request
-  private static lastRequestTime = 0;
-  private static failedRequests = 0;
-  private static backoffMultiplier = 1;
-
-  static enqueue(task: () => Promise<void>) {
-    return new Promise<void>((resolve) => {
-      const run = async () => {
-        // Vent til forrige request er ferdig + required delay
-        const now = Date.now();
-        const timeSinceLastRequest = now - MicrolinkRateLimit.lastRequestTime;
-        const requiredDelay = MicrolinkRateLimit.delay * MicrolinkRateLimit.backoffMultiplier;
-        
-        if (timeSinceLastRequest < requiredDelay) {
-          await new Promise(resolveWait => 
-            setTimeout(resolveWait, requiredDelay - timeSinceLastRequest)
-          );
-        }
-
-        MicrolinkRateLimit.active = true;
-        MicrolinkRateLimit.lastRequestTime = Date.now();
-        
-        console.log(`[MicrolinkRateLimit] Starting request (queue: ${MicrolinkRateLimit.queue.length})`);
-        
-        try {
-          await task();
-          // Reset backoff ved suksess
-          MicrolinkRateLimit.failedRequests = 0;
-          MicrolinkRateLimit.backoffMultiplier = 1;
-          console.log(`[MicrolinkRateLimit] Request successful`);
-        } catch (error) {
-          // Øk backoff ved feil
-          MicrolinkRateLimit.failedRequests++;
-          if (MicrolinkRateLimit.failedRequests > 2) {
-            MicrolinkRateLimit.backoffMultiplier = Math.min(4, MicrolinkRateLimit.backoffMultiplier * 2);
-            console.log(`[MicrolinkRateLimit] Increasing backoff to ${MicrolinkRateLimit.backoffMultiplier}x`);
-          }
-          console.log(`[MicrolinkRateLimit] Request failed:`, error);
-          throw error;
-        } finally {
-          MicrolinkRateLimit.active = false;
-          resolve();
-          // Start neste task etter en kort pause
-          setTimeout(() => MicrolinkRateLimit.next(), 1000);
-        }
-      };
-      
-      MicrolinkRateLimit.queue.push(run);
-      console.log(`[MicrolinkRateLimit] Added to queue (position: ${MicrolinkRateLimit.queue.length})`);
-      MicrolinkRateLimit.next();
-    });
-  }
-
-  private static next() {
-    if (!MicrolinkRateLimit.active && MicrolinkRateLimit.queue.length > 0) {
-      const nextTask = MicrolinkRateLimit.queue.shift();
-      if (nextTask) {
-        console.log(`[MicrolinkRateLimit] Processing next task (remaining: ${MicrolinkRateLimit.queue.length})`);
-        nextTask();
-      }
-    }
-  }
-
-  // Reset rate limiter
-  static reset() {
-    console.log(`[MicrolinkRateLimit] Resetting (cleared ${MicrolinkRateLimit.queue.length} queued tasks)`);
-    MicrolinkRateLimit.queue = [];
-    MicrolinkRateLimit.active = false;
-    MicrolinkRateLimit.failedRequests = 0;
-    MicrolinkRateLimit.backoffMultiplier = 1;
-    MicrolinkRateLimit.lastRequestTime = 0;
-  }
-
-  // Status info for debugging
-  static getStatus() {
-    return {
-      queueLength: MicrolinkRateLimit.queue.length,
-      active: MicrolinkRateLimit.active,
-      backoffMultiplier: MicrolinkRateLimit.backoffMultiplier,
-      failedRequests: MicrolinkRateLimit.failedRequests
-    };
-  }
-}
 
 import { DataDTO } from "@/types/api";
 import { useState, useEffect } from "react";
@@ -102,307 +16,38 @@ interface ArticlePreviewProps {
   priority: number; // Lavere tall = høyere prioritet
 }
 
-// Type definition for Microlink component
-interface MicrolinkProps {
-  url: string;
-  size?: 'small' | 'large';
-  media?: 'logo' | 'image';
-  contrast?: string | boolean;
-  lazy?: boolean;
-  style?: React.CSSProperties;
-  onError?: (error: Error | unknown) => void;
-  onLoad?: () => void;
-}
 
-type MicrolinkComponent = React.ComponentType<MicrolinkProps>;
 
-function ArticlePreview({ url, active, priority }: ArticlePreviewProps) {
-  const [MicrolinkComponent, setMicrolinkComponent] = useState<MicrolinkComponent | null>(null);
-  const [showFullPreview, setShowFullPreview] = useState(false);
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
-  const [microlinkFailed, setMicrolinkFailed] = useState(false);
-  const [microlinkLoaded, setMicrolinkLoaded] = useState(false);
-  const [shouldAttemptLoad, setShouldAttemptLoad] = useState(false);
-  const [showWarning, setShowWarning] = useState(false);
-  const [retryCount, setRetryCount] = useState(0);
-  const maxRetries = 2;
-
-  // Ekstraher domene for å vise umiddelbart
+function ArticlePreview({ url }: { url: string }) {
+  // Minimal fallback: vis kun logo eller domenenavn
   const getDomainInfo = (url: string) => {
     try {
       const domain = new URL(url).hostname.toLowerCase();
-      if (domain.includes('vg.no')) return { 
-        name: 'VG', 
-        color: 'bg-red-600',
-        logo: '/bilder/vg.png'
-      };
-      if (domain.includes('nrk.no')) return { 
-        name: 'NRK', 
-        color: 'bg-blue-600',
-        logo: '/bilder/NRK.png'
-      };
-      if (domain.includes('e24.no')) return { 
-        name: 'E24', 
-        color: 'bg-green-600',
-        logo: '/bilder/E42.png'
-      };
-      if (domain.includes('aftenposten.no')) return { 
-        name: 'AP', 
-        color: 'bg-gray-700',
-        logo: null
-      };
-      if (domain.includes('dagbladet.no')) return { 
-        name: 'DB', 
-        color: 'bg-red-500',
-        logo: null
-      };
-      return { 
-        name: domain.substring(0, 3).toUpperCase(), 
-        color: 'bg-blue-500',
-        logo: null
-      };
+      if (domain.includes('vg.no')) return { name: 'VG', color: 'bg-red-600', logo: '/bilder/vg.png' };
+      if (domain.includes('nrk.no')) return { name: 'NRK', color: 'bg-blue-600', logo: '/bilder/NRK.png' };
+      if (domain.includes('e24.no')) return { name: 'E24', color: 'bg-green-600', logo: '/bilder/E42.png' };
+      if (domain.includes('aftenposten.no')) return { name: 'AP', color: 'bg-gray-700', logo: null };
+      if (domain.includes('dagbladet.no')) return { name: 'DB', color: 'bg-red-500', logo: null };
+      return { name: domain.substring(0, 3).toUpperCase(), color: 'bg-blue-500', logo: null };
     } catch {
-      return { 
-        name: '?', 
-        color: 'bg-gray-500',
-        logo: null
-      };
+      return { name: '?', color: 'bg-gray-500', logo: null };
     }
   };
-
   const domainInfo = getDomainInfo(url);
-
-  // Start forsinket load basert på prioritet og kun hvis aktiv
-  useEffect(() => {
-    if (!active) {
-      setShouldAttemptLoad(false);
-      setMicrolinkFailed(false);
-      setShowWarning(false);
-      setRetryCount(0);
-      return;
-    }
-    
-    // Mye lengre delay for å spre requests over tid
-    const baseDelay = 10000; // 10 sekunder base delay
-    const priorityDelay = priority * 5000; // 5 sekunder per prioritet
-    const randomJitter = Math.random() * 3000; // 0-3 sek tilfeldig
-    
-    console.log(`[ArticlePreview] Scheduling load for ${url} in ${baseDelay + priorityDelay + randomJitter}ms (priority: ${priority})`);
-    
-    const timer = setTimeout(() => {
-      console.log(`[ArticlePreview] Starting load for ${url}`);
-      setShouldAttemptLoad(true);
-    }, baseDelay + priorityDelay + randomJitter);
-    
-    return () => clearTimeout(timer);
-  }, [active, priority]);
-
-  // Retry-funksjon
-  const attemptLoad = async () => {
-    setIsInitialLoad(true);
-    setMicrolinkFailed(false);
-    setShowWarning(false);
-    
-    try {
-      await MicrolinkRateLimit.enqueue(async () => {
-        console.log(`[ArticlePreview] Loading Microlink for ${url}`);
-        const microlinkModule = await import('@microlink/react');
-        setMicrolinkComponent(() => microlinkModule.default as MicrolinkComponent);
-        console.log(`[ArticlePreview] Successfully loaded Microlink for ${url}`);
-      });
-    } catch (error) {
-      console.warn(`[ArticlePreview] Microlink loading failed for ${url} (attempt ${retryCount + 1}):`, error);
-      
-      if (retryCount < maxRetries) {
-        // Retry med mye lengre delay
-        const retryDelay = Math.pow(2, retryCount) * 15000; // 15s, 30s for retries
-        console.log(`[ArticlePreview] Scheduling retry for ${url} in ${retryDelay}ms`);
-        setTimeout(() => {
-          setRetryCount(prev => prev + 1);
-        }, retryDelay);
-      } else {
-        console.log(`[ArticlePreview] Giving up on ${url} after ${maxRetries + 1} attempts`);
-        setMicrolinkFailed(true);
-        setShowWarning(true);
-      }
-    } finally {
-      setIsInitialLoad(false);
-    }
-  };
-
-  // Last inn Microlink med rate limit når vi skal prøve
-  useEffect(() => {
-    if (!shouldAttemptLoad) return;
-    attemptLoad();
-  }, [shouldAttemptLoad, retryCount]);
-
-  // Error handler med bedre retry-logikk
-  const handleError = (error: Error | unknown) => {
-    console.warn('[ArticlePreview] Microlink preview failed for', url, error);
-    
-    // Sjekk om det er en rate limit error
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    const isRateLimit = errorMessage.includes('429') || errorMessage.includes('439') || errorMessage.includes('rate');
-    
-    if (isRateLimit && retryCount < maxRetries) {
-      // Retry ved rate limit med enda lengre delay
-      const retryDelay = Math.pow(2, retryCount) * 20000; // 20s, 40s for rate limits
-      console.log(`[ArticlePreview] Rate limit detected for ${url}, retrying in ${retryDelay}ms`);
-      setTimeout(() => {
-        setRetryCount(prev => prev + 1);
-        setMicrolinkFailed(false);
-      }, retryDelay);
-    } else {
-      console.log(`[ArticlePreview] Permanent failure for ${url}`);
-      setMicrolinkFailed(true);
-      setShowWarning(true);
-    }
-  };
-
-  // Load handler
-  const handleLoad = () => {
-    setMicrolinkLoaded(true);
-    setTimeout(() => setShowFullPreview(true), 500);
-  };
-
-  // Hvis vi ikke prøver å laste, vis kun logo
-  if (!shouldAttemptLoad) {
-    return (
-      <div className="w-20 sm:w-32 h-16 sm:h-20 flex-shrink-0 bg-gray-50 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 overflow-hidden p-0 flex items-center justify-center">
-        {domainInfo.logo ? (
-          <img 
-            src={domainInfo.logo} 
-            alt={`${domainInfo.name} logo`}
-            className="w-full h-full object-cover"
-            style={{ objectFit: 'cover', width: '100%', height: '100%' }}
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <div className={`w-10 h-10 sm:w-14 sm:h-14 ${domainInfo.color} rounded-full flex items-center justify-center text-white text-lg font-bold`}>
-              {domainInfo.name}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // Hvis komponenten ikke er lastet ennå eller Microlink feilet, vis avis-logo fallback og evt warning
-  if (isInitialLoad || !MicrolinkComponent || microlinkFailed) {
-    return (
-      <div className="w-20 sm:w-32 h-16 sm:h-20 flex-shrink-0 bg-gray-50 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 overflow-hidden p-0 flex items-center justify-center relative">
-        {domainInfo.logo ? (
-          <img 
-            src={domainInfo.logo} 
-            alt={`${domainInfo.name} logo`}
-            className="w-full h-full object-cover"
-            style={{ objectFit: 'cover', width: '100%', height: '100%' }}
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <div className={`w-10 h-10 sm:w-14 sm:h-14 ${domainInfo.color} rounded-full flex items-center justify-center text-white text-lg font-bold`}>
-              {domainInfo.name}
-            </div>
-          </div>
-        )}
-        
-        {/* Loading-indikator kun hvis vi faktisk prøver å laste */}
-        {isInitialLoad && (
-          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-gray-500 dark:text-gray-400 hidden sm:block">
-            {retryCount > 0 ? `Prøver igjen... (${retryCount + 1}/${maxRetries + 1})` : 'Laster...'}
-          </div>
-        )}
-        
-        {/* Warning ved feil */}
-        {showWarning && (
-          <div className="absolute top-1 right-1 z-30">
-            <div className="w-3 h-3 bg-yellow-400 rounded-full border-2 border-yellow-600 animate-pulse" 
-                 title={`Forhåndsvisning feilet${retryCount > 0 ? ` etter ${retryCount + 1} forsøk` : ''}`}></div>
-          </div>
-        )}
-        
-        {/* Retry indicator */}
-        {retryCount > 0 && !microlinkFailed && (
-          <div className="absolute bottom-1 left-1 z-30">
-            <div className="w-2 h-2 bg-orange-400 rounded-full animate-pulse" title="Prøver igjen..."></div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
   return (
-    <div className="w-24 h-16 sm:w-28 sm:h-20 flex-shrink-0 relative bg-gray-50 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 overflow-hidden p-0">
-      {/* Avis-logo bakgrunn - ALLTID synlig til Microlink laster */}
-      <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-500 z-0 ${microlinkLoaded && !microlinkFailed ? 'opacity-15' : 'opacity-100'}`}>
-        {domainInfo.logo ? (
-          <img 
-            src={domainInfo.logo} 
-            alt={`${domainInfo.name} logo`}
-            className="w-full h-full object-cover"
-            style={{ objectFit: 'cover', width: '100%', height: '100%' }}
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <div className={`w-10 h-10 sm:w-14 sm:h-14 ${domainInfo.color} rounded-full flex items-center justify-center text-white text-lg font-bold`}>
-              {domainInfo.name}
-            </div>
+    <div className="w-20 sm:w-32 h-16 sm:h-20 flex-shrink-0 bg-gray-50 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 overflow-hidden p-0 flex items-center justify-center">
+      {domainInfo.logo ? (
+        <img 
+          src={domainInfo.logo} 
+          alt={`${domainInfo.name} logo`}
+          className="w-full h-full object-cover"
+          style={{ objectFit: 'cover', width: '100%', height: '100%' }}
+        />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center">
+          <div className={`w-10 h-10 sm:w-14 sm:h-14 ${domainInfo.color} rounded-full flex items-center justify-center text-white text-lg font-bold`}>
+            {domainInfo.name}
           </div>
-        )}
-      </div>
-
-      {/* Microlink innhold - kun synlig når det faktisk laster */}
-      {MicrolinkComponent && !microlinkFailed && (
-        <>
-          {/* Logo preview */}
-          <div className={`absolute inset-0 z-10 transition-opacity duration-300 ${showFullPreview ? 'opacity-0' : 'opacity-100'}`} style={{ width: '100%', height: '100%' }}>
-            <MicrolinkComponent
-              url={url}
-              size="small"
-              media="logo"
-              lazy={false}
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                fontSize: '10px',
-                border: 'none',
-                backgroundColor: 'transparent',
-                padding: 0,
-                margin: 0
-              }}
-              onError={handleError}
-            />
-          </div>
-
-          {/* Full preview */}
-          <div className={`absolute inset-0 z-20 transition-opacity duration-300 ${showFullPreview ? 'opacity-100' : 'opacity-0'}`} style={{ width: '100%', height: '100%' }}>
-            <MicrolinkComponent
-              url={url}
-              size="small"
-              contrast="true"
-              lazy={false}
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                fontSize: '10px',
-                border: 'none',
-                backgroundColor: 'transparent',
-                padding: 0,
-                margin: 0
-              }}
-              onLoad={handleLoad}
-              onError={handleError}
-            />
-          </div>
-        </>
-      )}
-
-      {/* Loading indikator for kjente aviser */}
-      {(isInitialLoad || (!microlinkLoaded && !microlinkFailed)) && domainInfo.logo && (
-        <div className="absolute bottom-1 right-1 z-30">
-          <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
         </div>
       )}
     </div>
@@ -414,22 +59,7 @@ export default function DataDisplay({ data, isLoading, error }: DataDisplayProps
   const [expandedCandidate, setExpandedCandidate] = useState<string | null>(null);
 
   // Reset rate limiter når komponenten mountes
-  useEffect(() => {
-    console.log('[DataDisplay] Resetting rate limiter');
-    MicrolinkRateLimit.reset();
-  }, []);
-
-  // Debug rate limiter status
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const status = MicrolinkRateLimit.getStatus();
-      if (status.queueLength > 0 || status.active) {
-        console.log('[DataDisplay] Rate limiter status:', status);
-      }
-    }, 5000);
-    
-    return () => clearInterval(interval);
-  }, []);
+  // Removed MicrolinkRateLimit references
 
   if (isLoading) {
     return (
@@ -485,11 +115,6 @@ export default function DataDisplay({ data, isLoading, error }: DataDisplayProps
   const displayedPersoner = showAllCandidates ? sortedPersoner : sortedPersoner.slice(0, 10);
 
   const toggleExpandCandidate = (candidateName: string) => {
-    // Reset rate limiter når vi skifter kandidat for å avbryte pending requests
-    if (expandedCandidate !== candidateName) {
-      console.log(`[DataDisplay] Switching candidate to ${candidateName}, resetting rate limiter`);
-      MicrolinkRateLimit.reset();
-    }
     setExpandedCandidate(expandedCandidate === candidateName ? null : candidateName);
   };
 
@@ -629,8 +254,6 @@ export default function DataDisplay({ data, isLoading, error }: DataDisplayProps
                         {/* Preview bilde til venstre - med prioritet */}
                         <ArticlePreview 
                           url={lenke} 
-                          active={expandedCandidate === person.navn} 
-                          priority={linkIndex} 
                         />
                         
                         {/* Lenke til høyre */}
