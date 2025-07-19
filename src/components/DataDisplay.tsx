@@ -43,6 +43,7 @@ interface DataDisplayProps {
 
 interface ArticlePreviewProps {
   url: string;
+  active: boolean;
 }
 
 // Type definition for Microlink component
@@ -59,7 +60,7 @@ interface MicrolinkProps {
 
 type MicrolinkComponent = React.ComponentType<MicrolinkProps>;
 
-function ArticlePreview({ url }: ArticlePreviewProps) {
+function ArticlePreview({ url, active }: ArticlePreviewProps) {
   const [MicrolinkComponent, setMicrolinkComponent] = useState<MicrolinkComponent | null>(null);
   const [showFullPreview, setShowFullPreview] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
@@ -113,13 +114,17 @@ function ArticlePreview({ url }: ArticlePreviewProps) {
 
   const domainInfo = getDomainInfo(url);
 
-  // Start forsinket load for å spre requests
+  // Start forsinket load for å spre requests, men kun hvis aktiv
   useEffect(() => {
+    if (!active) {
+      setShouldAttemptLoad(false);
+      return;
+    }
     const timer = setTimeout(() => {
       setShouldAttemptLoad(true);
     }, Math.random() * 4000); // 0-4 sek delay
     return () => clearTimeout(timer);
-  }, []);
+  }, [active]);
 
   // Last inn Microlink med rate limit når vi skal prøve
   useEffect(() => {
@@ -487,7 +492,7 @@ export default function DataDisplay({ data, isLoading, error }: DataDisplayProps
                         </span>
                         
                         {/* Preview bilde til venstre */}
-                        <ArticlePreview url={lenke} />
+                        <ArticlePreview url={lenke} active={expandedCandidate === person.navn} />
                         
                         {/* Lenke til høyre */}
                         <div className="flex-1 min-w-0">
