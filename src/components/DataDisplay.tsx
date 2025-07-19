@@ -1,9 +1,8 @@
-// Mer robust rate limiter for Microlink API
+// Meget streng rate limiter - kun en request om gangen globalt
 class MicrolinkRateLimit {
   private static queue: (() => void)[] = [];
-  private static active = 0;
-  private static maxConcurrent = 1; // Kun 1 om gangen
-  private static delay = 2000; // 2 sekunder mellom hver request
+  private static active = false;
+  private static delay = 5000; // 5 sekunder mellom hver request
   private static lastRequestTime = 0;
   private static failedRequests = 0;
   private static backoffMultiplier = 1;
@@ -11,58 +10,79 @@ class MicrolinkRateLimit {
   static enqueue(task: () => Promise<void>) {
     return new Promise<void>((resolve) => {
       const run = async () => {
-        // Vent til vi kan gjøre neste request
+        // Vent til forrige request er ferdig + required delay
         const now = Date.now();
         const timeSinceLastRequest = now - MicrolinkRateLimit.lastRequestTime;
         const requiredDelay = MicrolinkRateLimit.delay * MicrolinkRateLimit.backoffMultiplier;
         
         if (timeSinceLastRequest < requiredDelay) {
-          await new Promise(resolve => 
-            setTimeout(resolve, requiredDelay - timeSinceLastRequest)
+          await new Promise(resolveWait => 
+            setTimeout(resolveWait, requiredDelay - timeSinceLastRequest)
           );
         }
 
-        MicrolinkRateLimit.active++;
+        MicrolinkRateLimit.active = true;
         MicrolinkRateLimit.lastRequestTime = Date.now();
+        
+        console.log(`[MicrolinkRateLimit] Starting request (queue: ${MicrolinkRateLimit.queue.length})`);
         
         try {
           await task();
           // Reset backoff ved suksess
           MicrolinkRateLimit.failedRequests = 0;
           MicrolinkRateLimit.backoffMultiplier = 1;
+          console.log(`[MicrolinkRateLimit] Request successful`);
         } catch (error) {
           // Øk backoff ved feil
           MicrolinkRateLimit.failedRequests++;
-          if (MicrolinkRateLimit.failedRequests > 3) {
-            MicrolinkRateLimit.backoffMultiplier = Math.min(8, MicrolinkRateLimit.backoffMultiplier * 2);
+          if (MicrolinkRateLimit.failedRequests > 2) {
+            MicrolinkRateLimit.backoffMultiplier = Math.min(4, MicrolinkRateLimit.backoffMultiplier * 2);
+            console.log(`[MicrolinkRateLimit] Increasing backoff to ${MicrolinkRateLimit.backoffMultiplier}x`);
           }
+          console.log(`[MicrolinkRateLimit] Request failed:`, error);
           throw error;
         } finally {
-          MicrolinkRateLimit.active--;
-          // Vent litt før neste request
-          setTimeout(() => MicrolinkRateLimit.next(), 500);
+          MicrolinkRateLimit.active = false;
           resolve();
+          // Start neste task etter en kort pause
+          setTimeout(() => MicrolinkRateLimit.next(), 1000);
         }
       };
       
       MicrolinkRateLimit.queue.push(run);
+      console.log(`[MicrolinkRateLimit] Added to queue (position: ${MicrolinkRateLimit.queue.length})`);
       MicrolinkRateLimit.next();
     });
   }
 
   private static next() {
-    if (MicrolinkRateLimit.active < MicrolinkRateLimit.maxConcurrent && MicrolinkRateLimit.queue.length > 0) {
+    if (!MicrolinkRateLimit.active && MicrolinkRateLimit.queue.length > 0) {
       const nextTask = MicrolinkRateLimit.queue.shift();
-      if (nextTask) nextTask();
+      if (nextTask) {
+        console.log(`[MicrolinkRateLimit] Processing next task (remaining: ${MicrolinkRateLimit.queue.length})`);
+        nextTask();
+      }
     }
   }
 
-  // Reset rate limiter hvis vi har for mange feil
+  // Reset rate limiter
   static reset() {
+    console.log(`[MicrolinkRateLimit] Resetting (cleared ${MicrolinkRateLimit.queue.length} queued tasks)`);
     MicrolinkRateLimit.queue = [];
-    MicrolinkRateLimit.active = 0;
+    MicrolinkRateLimit.active = false;
     MicrolinkRateLimit.failedRequests = 0;
     MicrolinkRateLimit.backoffMultiplier = 1;
+    MicrolinkRateLimit.lastRequestTime = 0;
+  }
+
+  // Status info for debugging
+  static getStatus() {
+    return {
+      queueLength: MicrolinkRateLimit.queue.length,
+      active: MicrolinkRateLimit.active,
+      backoffMultiplier: MicrolinkRateLimit.backoffMultiplier,
+      failedRequests: MicrolinkRateLimit.failedRequests
+    };
   }
 }
 
@@ -162,12 +182,15 @@ function ArticlePreview({ url, active, priority }: ArticlePreviewProps) {
       return;
     }
     
-    // Prioritet-basert delay: høyere prioritet = kortere delay
-    const baseDelay = 3000; // 3 sekunder base delay
-    const priorityDelay = priority * 2000; // 2 sekunder per prioritet
-    const randomJitter = Math.random() * 1000; // 0-1 sek tilfeldig
+    // Mye lengre delay for å spre requests over tid
+    const baseDelay = 10000; // 10 sekunder base delay
+    const priorityDelay = priority * 5000; // 5 sekunder per prioritet
+    const randomJitter = Math.random() * 3000; // 0-3 sek tilfeldig
+    
+    console.log(`[ArticlePreview] Scheduling load for ${url} in ${baseDelay + priorityDelay + randomJitter}ms (priority: ${priority})`);
     
     const timer = setTimeout(() => {
+      console.log(`[ArticlePreview] Starting load for ${url}`);
       setShouldAttemptLoad(true);
     }, baseDelay + priorityDelay + randomJitter);
     
@@ -182,19 +205,23 @@ function ArticlePreview({ url, active, priority }: ArticlePreviewProps) {
     
     try {
       await MicrolinkRateLimit.enqueue(async () => {
+        console.log(`[ArticlePreview] Loading Microlink for ${url}`);
         const microlinkModule = await import('@microlink/react');
         setMicrolinkComponent(() => microlinkModule.default as MicrolinkComponent);
+        console.log(`[ArticlePreview] Successfully loaded Microlink for ${url}`);
       });
     } catch (error) {
-      console.warn(`Microlink loading failed for ${url} (attempt ${retryCount + 1}):`, error);
+      console.warn(`[ArticlePreview] Microlink loading failed for ${url} (attempt ${retryCount + 1}):`, error);
       
       if (retryCount < maxRetries) {
-        // Retry med eksponentiell backoff
-        const retryDelay = Math.pow(2, retryCount) * 5000; // 5s, 10s, 20s
+        // Retry med mye lengre delay
+        const retryDelay = Math.pow(2, retryCount) * 15000; // 15s, 30s for retries
+        console.log(`[ArticlePreview] Scheduling retry for ${url} in ${retryDelay}ms`);
         setTimeout(() => {
           setRetryCount(prev => prev + 1);
         }, retryDelay);
       } else {
+        console.log(`[ArticlePreview] Giving up on ${url} after ${maxRetries + 1} attempts`);
         setMicrolinkFailed(true);
         setShowWarning(true);
       }
@@ -211,20 +238,22 @@ function ArticlePreview({ url, active, priority }: ArticlePreviewProps) {
 
   // Error handler med bedre retry-logikk
   const handleError = (error: Error | unknown) => {
-    console.warn('Microlink preview failed for', url, error);
+    console.warn('[ArticlePreview] Microlink preview failed for', url, error);
     
     // Sjekk om det er en rate limit error
     const errorMessage = error instanceof Error ? error.message : String(error);
     const isRateLimit = errorMessage.includes('429') || errorMessage.includes('439') || errorMessage.includes('rate');
     
     if (isRateLimit && retryCount < maxRetries) {
-      // Retry ved rate limit
-      const retryDelay = Math.pow(2, retryCount) * 10000; // 10s, 20s, 40s for rate limits
+      // Retry ved rate limit med enda lengre delay
+      const retryDelay = Math.pow(2, retryCount) * 20000; // 20s, 40s for rate limits
+      console.log(`[ArticlePreview] Rate limit detected for ${url}, retrying in ${retryDelay}ms`);
       setTimeout(() => {
         setRetryCount(prev => prev + 1);
         setMicrolinkFailed(false);
       }, retryDelay);
     } else {
+      console.log(`[ArticlePreview] Permanent failure for ${url}`);
       setMicrolinkFailed(true);
       setShowWarning(true);
     }
@@ -386,7 +415,20 @@ export default function DataDisplay({ data, isLoading, error }: DataDisplayProps
 
   // Reset rate limiter når komponenten mountes
   useEffect(() => {
+    console.log('[DataDisplay] Resetting rate limiter');
     MicrolinkRateLimit.reset();
+  }, []);
+
+  // Debug rate limiter status
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const status = MicrolinkRateLimit.getStatus();
+      if (status.queueLength > 0 || status.active) {
+        console.log('[DataDisplay] Rate limiter status:', status);
+      }
+    }, 5000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   if (isLoading) {
@@ -443,8 +485,9 @@ export default function DataDisplay({ data, isLoading, error }: DataDisplayProps
   const displayedPersoner = showAllCandidates ? sortedPersoner : sortedPersoner.slice(0, 10);
 
   const toggleExpandCandidate = (candidateName: string) => {
-    // Reset rate limiter når vi skifter kandidat
+    // Reset rate limiter når vi skifter kandidat for å avbryte pending requests
     if (expandedCandidate !== candidateName) {
+      console.log(`[DataDisplay] Switching candidate to ${candidateName}, resetting rate limiter`);
       MicrolinkRateLimit.reset();
     }
     setExpandedCandidate(expandedCandidate === candidateName ? null : candidateName);
