@@ -3,7 +3,7 @@ class MicrolinkRateLimit {
   private static queue: (() => void)[] = [];
   private static active = 0;
   private static maxConcurrent = 2;
-  private static delay = 1000; // ms
+  private static delay = 3000; // ms
 
   static enqueue(task: () => Promise<void>) {
     return new Promise<void>((resolve) => {
@@ -117,7 +117,7 @@ function ArticlePreview({ url }: ArticlePreviewProps) {
   useEffect(() => {
     const timer = setTimeout(() => {
       setShouldAttemptLoad(true);
-    }, Math.random() * 2000); // 0-2 sek delay
+    }, Math.random() * 4000); // 0-4 sek delay
     return () => clearTimeout(timer);
   }, []);
 
