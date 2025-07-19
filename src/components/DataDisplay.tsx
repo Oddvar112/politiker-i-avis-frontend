@@ -110,7 +110,7 @@ function ArticlePreview({ url }: ArticlePreviewProps) {
   // Hvis komponenten ikke er lastet ennå eller Microlink feilet, vis avis-logo fallback
   if (isInitialLoad || !MicrolinkComponent || microlinkFailed) {
     return (
-      <div className="w-20 sm:w-32 h-16 sm:h-20 flex-shrink-0 bg-gray-50 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center overflow-hidden">
+      <div className="w-20 sm:w-32 h-16 sm:h-20 flex-shrink-0 bg-gray-50 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center overflow-hidden p-0">
         {domainInfo.logo ? (
           <img 
             src={domainInfo.logo} 
@@ -120,11 +120,13 @@ function ArticlePreview({ url }: ArticlePreviewProps) {
           />
         ) : (
           <>
-            <div className={`w-6 h-6 sm:w-8 sm:h-8 ${domainInfo.color} rounded-full flex items-center justify-center text-white text-xs font-bold mb-1`}>
-              {domainInfo.name}
+            <div className={`w-full h-full flex items-center justify-center`}>
+              <div className={`w-10 h-10 sm:w-14 sm:h-14 ${domainInfo.color} rounded-full flex items-center justify-center text-white text-lg font-bold`}>
+                {domainInfo.name}
+              </div>
             </div>
             {isInitialLoad && (
-              <div className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">Laster...</div>
+              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-gray-500 dark:text-gray-400 hidden sm:block">Laster...</div>
             )}
           </>
         )}
@@ -133,7 +135,7 @@ function ArticlePreview({ url }: ArticlePreviewProps) {
   }
 
   return (
-    <div className="w-24 h-16 sm:w-28 sm:h-20 flex-shrink-0 relative bg-gray-50 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <div className="w-24 h-16 sm:w-28 sm:h-20 flex-shrink-0 relative bg-gray-50 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 overflow-hidden p-0">
       {/* Avis-logo bakgrunn - ALLTID synlig til Microlink laster */}
       <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-500 z-0 ${microlinkLoaded && !microlinkFailed ? 'opacity-15' : 'opacity-100'}`}>
         {domainInfo.logo ? (
@@ -144,8 +146,10 @@ function ArticlePreview({ url }: ArticlePreviewProps) {
             style={{ objectFit: 'cover', width: '100%', height: '100%' }}
           />
         ) : (
-          <div className={`w-6 h-6 sm:w-8 sm:h-8 ${domainInfo.color} rounded-full flex items-center justify-center text-white text-xs font-bold`}>
-            {domainInfo.name}
+          <div className="w-full h-full flex items-center justify-center">
+            <div className={`w-10 h-10 sm:w-14 sm:h-14 ${domainInfo.color} rounded-full flex items-center justify-center text-white text-lg font-bold`}>
+              {domainInfo.name}
+            </div>
           </div>
         )}
       </div>
@@ -154,42 +158,46 @@ function ArticlePreview({ url }: ArticlePreviewProps) {
       {MicrolinkComponent && !microlinkFailed && (
         <>
           {/* Logo preview */}
-          <div className={`absolute inset-0 z-10 transition-opacity duration-300 ${showFullPreview ? 'opacity-0' : 'opacity-100'}`}>
-          <MicrolinkComponent
-            url={url}
-            size="small"
-            media="logo"
-            lazy={false}
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              fontSize: '10px',
-              border: 'none',
-              backgroundColor: 'transparent'
-            }}
-            onError={handleError}
-          />
+          <div className={`absolute inset-0 z-10 transition-opacity duration-300 ${showFullPreview ? 'opacity-0' : 'opacity-100'}`} style={{ width: '100%', height: '100%' }}>
+            <MicrolinkComponent
+              url={url}
+              size="small"
+              media="logo"
+              lazy={false}
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                fontSize: '10px',
+                border: 'none',
+                backgroundColor: 'transparent',
+                padding: 0,
+                margin: 0
+              }}
+              onError={handleError}
+            />
           </div>
 
           {/* Full preview */}
-          <div className={`absolute inset-0 z-20 transition-opacity duration-300 ${showFullPreview ? 'opacity-100' : 'opacity-0'}`}>
-          <MicrolinkComponent
-            url={url}
-            size="small"
-            contrast="true"
-            lazy={false}
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              fontSize: '10px',
-              border: 'none',
-              backgroundColor: 'transparent'
-            }}
-            onLoad={handleLoad}
-            onError={handleError}
-          />
+          <div className={`absolute inset-0 z-20 transition-opacity duration-300 ${showFullPreview ? 'opacity-100' : 'opacity-0'}`} style={{ width: '100%', height: '100%' }}>
+            <MicrolinkComponent
+              url={url}
+              size="small"
+              contrast="true"
+              lazy={false}
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                fontSize: '10px',
+                border: 'none',
+                backgroundColor: 'transparent',
+                padding: 0,
+                margin: 0
+              }}
+              onLoad={handleLoad}
+              onError={handleError}
+            />
           </div>
         </>
       )}
