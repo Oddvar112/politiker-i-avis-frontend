@@ -1,4 +1,4 @@
-import { DataDTO, ApiKilde } from '@/types/api';
+import { DataDTO, ApiKilde, SammendragDTO } from '@/types/api';
 
 const API_BASE_URL = 'https://api.kvasirsbrygg.no';
 
@@ -37,6 +37,23 @@ class KvasirApiService {
    */
   async getAnalyseData(kilde: ApiKilde): Promise<DataDTO> {
     return this.fetchApi<DataDTO>(`/api/analyse/${kilde}`);
+  }
+
+  /**
+   * Henter sammendrag for en spesifikk artikkel-link
+   * @param link - URL til artikkelen
+   * @returns Promise med sammendrag data eller null hvis ikke funnet
+   */
+  async getSammendrag(link: string): Promise<SammendragDTO | null> {
+    try {
+      const encodedLink = encodeURIComponent(link);
+      return await this.fetchApi<SammendragDTO>(`/api/analyse/sammendrag?link=${encodedLink}`);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   /**

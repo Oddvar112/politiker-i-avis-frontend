@@ -21,6 +21,15 @@ export interface DataDTO {
   kilde: string;
 }
 
+export interface SammendragDTO {
+  id: number;
+  link: string;
+  sammendrag: string;
+  kompresjonRatio: number;
+  antallOrdOriginal: number;
+  antallOrdSammendrag: number;
+}
+
 export type ApiKilde = 'vg' | 'nrk' | 'e24' | 'alt';
 
 export interface ApiError {

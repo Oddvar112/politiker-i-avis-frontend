@@ -1,7 +1,8 @@
 // Meget streng rate limiter - kun en request om gangen globalt
 
-import { DataDTO } from "@/types/api";
+import { DataDTO, SammendragDTO } from "@/types/api";
 import { useState, useEffect } from "react";
+import { kvasirApi } from "../services/kvasirApi";
 import React from "react";
 
 interface DataDisplayProps {
@@ -15,8 +16,6 @@ interface ArticlePreviewProps {
   active: boolean;
   priority: number; // Lavere tall = høyere prioritet
 }
-
-
 
 function ArticlePreview({ url }: { url: string }) {
   // Minimal fallback: vis kun logo eller domenenavn
@@ -54,12 +53,117 @@ function ArticlePreview({ url }: { url: string }) {
   );
 }
 
+// Ny komponent for en enkelartikkel med sammendrag-funksjonalitet
+function ArticleWithSummary({ link, index }: { link: string; index: number }) {
+  const [sammendrag, setSammendrag] = useState<SammendragDTO | null>(null);
+  const [showSammendrag, setShowSammendrag] = useState(false);
+  const [isLoadingSammendrag, setIsLoadingSammendrag] = useState(false);
+  const [sammendragError, setSammendragError] = useState<string | null>(null);
+
+  const handleSammendragClick = async () => {
+    if (showSammendrag) {
+      setShowSammendrag(false);
+      return;
+    }
+
+    if (!sammendrag && !isLoadingSammendrag) {
+      setIsLoadingSammendrag(true);
+      setSammendragError(null);
+      
+      try {
+        const result = await kvasirApi.getSammendrag(link);
+        setSammendrag(result);
+        setShowSammendrag(true);
+      } catch (error) {
+        setSammendragError(error instanceof Error ? error.message : 'Kunne ikke hente sammendrag');
+      } finally {
+        setIsLoadingSammendrag(false);
+      }
+    } else {
+      setShowSammendrag(true);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-start gap-2 sm:gap-3 p-2 sm:p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+        <span className="text-xs text-gray-500 mt-1 min-w-[16px] sm:min-w-[20px] flex-shrink-0">
+          {index + 1}.
+        </span>
+        
+        {/* Preview bilde til venstre */}
+        <ArticlePreview url={link} />
+        
+        {/* Innhold og kontroller */}
+        <div className="flex-1 min-w-0 space-y-2">
+          {/* Artikkellenke */}
+          <a
+            href={link}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs sm:text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline break-all block"
+          >
+            {link}
+          </a>
+          
+          {/* Sammendrag-knapp */}
+          <button
+            onClick={handleSammendragClick}
+            disabled={isLoadingSammendrag}
+            className="px-2 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoadingSammendrag ? (
+              <span className="flex items-center gap-1">
+                <span className="animate-spin w-3 h-3 border border-purple-600 border-t-transparent rounded-full"></span>
+                Laster...
+              </span>
+            ) : showSammendrag ? (
+              'Skjul sammendrag'
+            ) : (
+              'Vis sammendrag'
+            )}
+          </button>
+        </div>
+      </div>
+      
+      {/* Sammendrag-visning */}
+      {showSammendrag && (
+        <div className="ml-6 sm:ml-8 p-3 sm:p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg">
+          {sammendragError ? (
+            <div className="text-red-600 dark:text-red-400 text-sm">
+              <span className="font-medium">Feil:</span> {sammendragError}
+            </div>
+          ) : sammendrag ? (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs font-medium">
+                <span className="px-2 py-1 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200 border border-blue-200 dark:border-blue-700">
+                  Original: <span className="font-bold">{sammendrag.antallOrdOriginal}</span> ord
+                </span>
+                <span className="px-2 py-1 rounded bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-200 border border-green-200 dark:border-green-700">
+                  Sammendrag: <span className="font-bold">{sammendrag.antallOrdSammendrag}</span> ord
+                </span>
+                <span className="px-2 py-1 rounded bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-200 border border-purple-200 dark:border-purple-700">
+                  Kompresjon: <span className="font-bold">{(sammendrag.kompresjonRatio * 100).toFixed(1)}%</span>
+                </span>
+              </div>
+              <div className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                {sammendrag.sammendrag}
+              </div>
+            </div>
+          ) : (
+            <div className="text-gray-500 dark:text-gray-400 text-sm">
+              Sammendrag ikke tilgjengelig for denne artikkelen.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DataDisplay({ data, isLoading, error }: DataDisplayProps) {
   const [showAllCandidates, setShowAllCandidates] = useState(false);
   const [expandedCandidate, setExpandedCandidate] = useState<string | null>(null);
-
-  // Reset rate limiter når komponenten mountes
-  // Removed MicrolinkRateLimit references
 
   if (isLoading) {
     return (
@@ -246,28 +350,11 @@ export default function DataDisplay({ data, isLoading, error }: DataDisplayProps
                   </h5>
                   <div className="space-y-3 max-h-64 sm:max-h-96 overflow-y-auto">
                     {person.lenker.map((lenke, linkIndex) => (
-                      <div key={linkIndex} className="flex items-start gap-2 sm:gap-3 p-2 sm:p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                        <span className="text-xs text-gray-500 mt-1 min-w-[16px] sm:min-w-[20px] flex-shrink-0">
-                          {linkIndex + 1}.
-                        </span>
-                        
-                        {/* Preview bilde til venstre - med prioritet */}
-                        <ArticlePreview 
-                          url={lenke} 
-                        />
-                        
-                        {/* Lenke til høyre */}
-                        <div className="flex-1 min-w-0">
-                          <a
-                            href={lenke}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs sm:text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline break-all block"
-                          >
-                            {lenke}
-                          </a>
-                        </div>
-                      </div>
+                      <ArticleWithSummary 
+                        key={linkIndex} 
+                        link={lenke} 
+                        index={linkIndex} 
+                      />
                     ))}
                   </div>
                 </div>
