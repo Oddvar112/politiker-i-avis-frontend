@@ -32,7 +32,7 @@ class KvasirApiService {
 
   /**
    * Henter analyse data for en spesifik kilde
-   * @param kilde - Hvilken kilde å hente data for ('vg', 'nrk', 'e24', 'alt')
+   * @param kilde - Hvilken kilde å hente data for ('vg', 'nrk', 'e24', 'dagbladet', 'alt')
    * @returns Promise med analyse data
    */
   async getAnalyseData(kilde: ApiKilde): Promise<DataDTO> {
@@ -64,16 +64,18 @@ class KvasirApiService {
     vg: DataDTO;
     nrk: DataDTO;
     e24: DataDTO;
+    dagbladet: DataDTO;
     alt: DataDTO;
   }> {
-    const [vg, nrk, e24, alt] = await Promise.all([
+    const [vg, nrk, e24, dagbladet, alt] = await Promise.all([
       this.getAnalyseData('vg'),
       this.getAnalyseData('nrk'),
       this.getAnalyseData('e24'),
+      this.getAnalyseData('dagbladet'),
       this.getAnalyseData('alt'),
     ]);
 
-    return { vg, nrk, e24, alt };
+    return { vg, nrk, e24, dagbladet, alt };
   }
 
   /**

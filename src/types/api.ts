@@ -30,7 +30,7 @@ export interface SammendragDTO {
   antallOrdSammendrag: number;
 }
 
-export type ApiKilde = 'vg' | 'nrk' | 'e24' | 'alt';
+export type ApiKilde = 'vg' | 'nrk' | 'e24' | 'dagbladet' | 'alt';
 
 export interface ApiError {
   message: string;
