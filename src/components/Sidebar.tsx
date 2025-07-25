@@ -19,6 +19,12 @@ const newspapers = [
     imageSrc: "/bilder/E42.png",
     alt: "E24 logo",
     kilde: "e24"
+  },
+  {
+    name: "Dagbladet",
+    imageSrc: "/bilder/dagbladet.png",
+    alt: "Dagbladet logo",
+    kilde: "dagbladet"
   }
 ];
 
