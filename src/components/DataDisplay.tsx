@@ -1,4 +1,3 @@
-// Meget streng rate limiter - kun en request om gangen globalt
 
 import { DataDTO, SammendragDTO } from "@/types/api";
 import { useState, useEffect } from "react";
@@ -25,8 +24,8 @@ function ArticlePreview({ url }: { url: string }) {
       if (domain.includes('vg.no')) return { name: 'VG', color: 'bg-red-600', logo: '/bilder/vg.png' };
       if (domain.includes('nrk.no')) return { name: 'NRK', color: 'bg-blue-600', logo: '/bilder/NRK.png' };
       if (domain.includes('e24.no')) return { name: 'E24', color: 'bg-green-600', logo: '/bilder/E42.png' };
+      if (domain.includes('dagbladet.no')) return { name: 'DB', color: 'bg-red-500', logo: '/bilder/dagbladet.png' };
       if (domain.includes('aftenposten.no')) return { name: 'AP', color: 'bg-gray-700', logo: null };
-      if (domain.includes('dagbladet.no')) return { name: 'DB', color: 'bg-red-500', logo: null };
       return { name: domain.substring(0, 3).toUpperCase(), color: 'bg-blue-500', logo: null };
     } catch {
       return { name: '?', color: 'bg-gray-500', logo: null };
@@ -222,11 +221,22 @@ export default function DataDisplay({ data, isLoading, error }: DataDisplayProps
     setExpandedCandidate(expandedCandidate === candidateName ? null : candidateName);
   };
 
+  const getSourceDisplayName = (kilde: string) => {
+    switch (kilde.toLowerCase()) {
+      case 'vg': return 'VG';
+      case 'nrk': return 'NRK';
+      case 'e24': return 'E24';
+      case 'dagbladet': return 'DAGBLADET';
+      case 'alt': return 'Alle kilder';
+      default: return kilde.toUpperCase();
+    }
+  };
+
   return (
     <div className="py-6 sm:py-8 max-w-none xl:max-w-7xl 2xl:max-w-none">
       <div className="mb-6 sm:mb-8">
         <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-foreground mb-2">
-          {data.kilde === 'alt' ? 'Alle kilder' : data.kilde.toUpperCase()} - Kandidatanalyse
+          {getSourceDisplayName(data.kilde)} - Kandidatanalyse
         </h1>
         <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300">
           Analyse av {data.totaltAntallArtikler} artikler med {data.allePersonernevnt.length} unike kandidater
