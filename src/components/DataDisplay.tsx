@@ -223,9 +223,12 @@ function DateRangeSelector({ dateRange, onDateRangeChange, onResetDateFilter }: 
     return { valid: true };
   };
 
+  // Returnerer kun true/false for gyldig dato
+  const isValid = (selectedDate: Date) => isValidDate(selectedDate).valid;
+
+
   const handleFromDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setShowValidationWarning(null);
-    
     if (!e.target.value) {
       onDateRangeChange({
         ...dateRange,
@@ -233,34 +236,39 @@ function DateRangeSelector({ dateRange, onDateRangeChange, onResetDateFilter }: 
       });
       return;
     }
-
     const selectedDate = new Date(e.target.value);
     const validation = isValidDate(selectedDate);
-    
     if (!validation.valid) {
-      setShowValidationWarning(validation.message || 'Ugyldig dato');
-      // Tilbakestill input til forrige gyldig verdi eller minimum
+      // Ikke vis advarsel her, vises på blur
       setTimeout(() => {
         e.target.value = formatDateForInput(dateRange.fraDato || minimumDate);
       }, 100);
       return;
     }
-
-    // Sikre at tilDato ikke er før den nye fraDato
     let newTilDato = dateRange.tilDato;
     if (newTilDato && selectedDate > newTilDato) {
       newTilDato = selectedDate;
     }
-
     onDateRangeChange({
       fraDato: selectedDate,
       tilDato: newTilDato
     });
   };
 
+  const handleFromDateBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    if (!e.target.value) return;
+    const selectedDate = new Date(e.target.value);
+    const validation = isValidDate(selectedDate);
+    if (!validation.valid) {
+      setShowValidationWarning(validation.message || 'Ugyldig dato');
+    } else {
+      setShowValidationWarning(null);
+    }
+  };
+
+
   const handleToDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setShowValidationWarning(null);
-    
     if (!e.target.value) {
       onDateRangeChange({
         ...dateRange,
@@ -268,29 +276,34 @@ function DateRangeSelector({ dateRange, onDateRangeChange, onResetDateFilter }: 
       });
       return;
     }
-
     const selectedDate = new Date(e.target.value);
     const validation = isValidDate(selectedDate);
-    
     if (!validation.valid) {
-      setShowValidationWarning(validation.message || 'Ugyldig dato');
-      // Tilbakestill input til forrige gyldig verdi eller dagens dato
+      // Ikke vis advarsel her, vises på blur
       setTimeout(() => {
         e.target.value = formatDateForInput(dateRange.tilDato || today);
       }, 100);
       return;
     }
-
-    // Sikre at fraDato ikke er etter den nye tilDato
     let newFraDato = dateRange.fraDato;
     if (newFraDato && selectedDate < newFraDato) {
       newFraDato = selectedDate;
     }
-
     onDateRangeChange({
       fraDato: newFraDato,
       tilDato: selectedDate
     });
+  };
+
+  const handleToDateBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    if (!e.target.value) return;
+    const selectedDate = new Date(e.target.value);
+    const validation = isValidDate(selectedDate);
+    if (!validation.valid) {
+      setShowValidationWarning(validation.message || 'Ugyldig dato');
+    } else {
+      setShowValidationWarning(null);
+    }
   };
 
   const hasActiveFilter = dateRange.fraDato || dateRange.tilDato;
@@ -313,6 +326,7 @@ function DateRangeSelector({ dateRange, onDateRangeChange, onResetDateFilter }: 
                 type="date"
                 value={formatDateForInput(dateRange.fraDato)}
                 onChange={handleFromDateChange}
+                onBlur={handleFromDateBlur}
                 min={formatDateForInput(minimumDate)}
                 max={formatDateForInput(today)}
                 className="px-3 py-2 text-sm border border-blue-600 dark:border-blue-400 rounded-full bg-white dark:bg-gray-800 text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
@@ -331,6 +345,7 @@ function DateRangeSelector({ dateRange, onDateRangeChange, onResetDateFilter }: 
                 type="date"
                 value={formatDateForInput(dateRange.tilDato)}
                 onChange={handleToDateChange}
+                onBlur={handleToDateBlur}
                 min={formatDateForInput(dateRange.fraDato || minimumDate)}
                 max={formatDateForInput(today)}
                 className="px-3 py-2 text-sm border border-blue-600 dark:border-blue-400 rounded-full bg-white dark:bg-gray-800 text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
