@@ -192,19 +192,11 @@ function DateRangeSelector({ dateRange, onDateRangeChange, onResetDateFilter }: 
   onDateRangeChange: (dateRange: DateRange) => void;
   onResetDateFilter: () => void;
 }) {
+
+  // Sett standard verdier til min/max
   const minimumDate = kvasirApi.getMinimumDate();
   const today = new Date();
   const [showValidationWarning, setShowValidationWarning] = useState<string | null>(null);
-
-  // Sett standard verdier til min/max når ingen filter er aktive
-  React.useEffect(() => {
-    if (!dateRange.fraDato && !dateRange.tilDato) {
-      onDateRangeChange({
-        fraDato: minimumDate,
-        tilDato: today
-      });
-    }
-  }, []);
 
   const formatDateForInput = (date: Date | null): string => {
     if (!date) return '';
@@ -391,18 +383,19 @@ function DateRangeSelector({ dateRange, onDateRangeChange, onResetDateFilter }: 
   );
 }
 
-
 export default function DataDisplay({ data, isLoading, error, dateRange, onDateRangeChange, onResetDateFilter }: DataDisplayProps) {
   const [showAllCandidates, setShowAllCandidates] = useState(false);
   const [expandedCandidate, setExpandedCandidate] = useState<string | null>(null);
 
-  // Sett default fraDato til 24. i måneden for minimumDate, og tilDato til dagens dato ved første last
-  useEffect(() => {
+  // Sett default datoperiode på første last hvis ikke satt
+  React.useEffect(() => {
     if (!dateRange.fraDato && !dateRange.tilDato) {
-      const min = kvasirApi.getMinimumDate();
-      const fraDato = new Date(min.getFullYear(), min.getMonth(), 24);
-      const tilDato = new Date();
-      onDateRangeChange({ fraDato, tilDato });
+      const minimumDate = kvasirApi.getMinimumDate();
+      const today = new Date();
+      onDateRangeChange({
+        fraDato: minimumDate,
+        tilDato: today
+      });
     }
   }, []);
 
