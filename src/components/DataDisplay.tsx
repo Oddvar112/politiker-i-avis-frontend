@@ -1,4 +1,13 @@
+
 import { DataDTO, SammendragDTO, DateRange } from "@/types/api";
+
+// Hjelpefunksjon for å få lokal dato i YYYY-MM-DD (samme som input type="date" forventer)
+function formatDateLocalInput(date: Date): string {
+  const year = date.getFullYear();
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const day = date.getDate().toString().padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 import { useState, useEffect } from "react";
 import { kvasirApi } from "../services/kvasirApi";
 import React from "react";
@@ -510,55 +519,12 @@ export default function DataDisplay({ data, isLoading, error, dateRange, onDateR
         )}
       </div>
 
-      {/* Datovelger under overskriften, med visuell styling men beholdt input-bredde */}
-      <div className="mb-6 sm:mb-8">
-        <div className="bg-white dark:bg-gray-900 p-4 sm:p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
-          <h3 className="text-base sm:text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-            <svg className="w-5 h-5 text-blue-400 dark:text-blue-300" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-            Filtrer etter dato
-          </h3>
-          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-            <div className="flex flex-col sm:flex-row gap-3 w-full">
-              <div className="flex flex-col gap-1">
-                <label htmlFor="fraDato" className="text-xs font-medium text-gray-600 dark:text-gray-400">Fra dato:</label>
-                <input
-                  id="fraDato"
-                  type="date"
-                  value={dateRange.fraDato ? dateRange.fraDato.toISOString().split('T')[0] : ''}
-                  onChange={e => {
-                    const val = e.target.value ? new Date(e.target.value) : null;
-                    onDateRangeChange({ ...dateRange, fraDato: val });
-                  }}
-                  min={kvasirApi.getMinimumDate().toISOString().split('T')[0]}
-                  max={new Date().toISOString().split('T')[0]}
-                  className="px-3 py-2 text-sm border border-blue-300 dark:border-blue-600 rounded-md bg-white dark:bg-gray-800 text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                <span className="text-xs text-gray-500 dark:text-gray-400">Fra {kvasirApi.formatNorwegianDate(kvasirApi.getMinimumDate())}</span>
-              </div>
-              <div className="flex flex-col gap-1">
-                <label htmlFor="tilDato" className="text-xs font-medium text-gray-600 dark:text-gray-400">Til dato:</label>
-                <input
-                  id="tilDato"
-                  type="date"
-                  value={dateRange.tilDato ? dateRange.tilDato.toISOString().split('T')[0] : ''}
-                  onChange={e => {
-                    const val = e.target.value ? new Date(e.target.value) : null;
-                    onDateRangeChange({ ...dateRange, tilDato: val });
-                  }}
-                  min={dateRange.fraDato ? dateRange.fraDato.toISOString().split('T')[0] : kvasirApi.getMinimumDate().toISOString().split('T')[0]}
-                  max={new Date().toISOString().split('T')[0]}
-                  className="px-3 py-2 text-sm border border-blue-300 dark:border-blue-600 rounded-md bg-white dark:bg-gray-800 text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                <span className="text-xs text-gray-500 dark:text-gray-400">Til {kvasirApi.formatNorwegianDate(new Date())}</span>
-              </div>
-            </div>
-            <button
-              onClick={onResetDateFilter}
-              className="px-3 py-2 text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors mt-2 sm:mt-0"
-            >Tilbakestill</button>
-          </div>
-        </div>
-      </div>
+      {/* Datovelger under overskriften */}
+      <DateRangeSelector
+        dateRange={dateRange}
+        onDateRangeChange={onDateRangeChange}
+        onResetDateFilter={onResetDateFilter}
+      />
 
       {/* Hovedstatistikk */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
