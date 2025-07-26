@@ -190,25 +190,110 @@ function DateRangeSelector({ dateRange, onDateRangeChange, onResetDateFilter }: 
 }) {
   const minimumDate = kvasirApi.getMinimumDate();
   const today = new Date();
+  const [showValidationWarning, setShowValidationWarning] = useState<string | null>(null);
+
+  // Sett standard verdier til min/max når ingen filter er aktive
+  React.useEffect(() => {
+    if (!dateRange.fraDato && !dateRange.tilDato) {
+      onDateRangeChange({
+        fraDato: minimumDate,
+        tilDato: today
+      });
+    }
+  }, []);
 
   const formatDateForInput = (date: Date | null): string => {
     if (!date) return '';
     return date.toISOString().split('T')[0];
   };
 
+  const isValidDate = (selectedDate: Date): { valid: boolean; message?: string } => {
+    const selectedDateOnly = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
+    const minimumDateOnly = new Date(minimumDate.getFullYear(), minimumDate.getMonth(), minimumDate.getDate());
+    const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+    if (selectedDateOnly < minimumDateOnly) {
+      return { 
+        valid: false, 
+        message: `Kan ikke velge dato før ${kvasirApi.formatNorwegianDate(minimumDate)}. Dette er den tidligste datoen vi har data fra.`
+      };
+    }
+    if (selectedDateOnly > todayOnly) {
+      return { 
+        valid: false, 
+        message: `Kan ikke velge fremtidige datoer. Velg dagens dato eller tidligere.`
+      };
+    }
+    return { valid: true };
+  };
+
   const handleFromDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newDate = e.target.value ? new Date(e.target.value) : null;
+    setShowValidationWarning(null);
+    
+    if (!e.target.value) {
+      onDateRangeChange({
+        ...dateRange,
+        fraDato: null
+      });
+      return;
+    }
+
+    const selectedDate = new Date(e.target.value);
+    const validation = isValidDate(selectedDate);
+    
+    if (!validation.valid) {
+      setShowValidationWarning(validation.message || 'Ugyldig dato');
+      // Tilbakestill input til forrige gyldig verdi eller minimum
+      setTimeout(() => {
+        e.target.value = formatDateForInput(dateRange.fraDato || minimumDate);
+      }, 100);
+      return;
+    }
+
+    // Sikre at tilDato ikke er før den nye fraDato
+    let newTilDato = dateRange.tilDato;
+    if (newTilDato && selectedDate > newTilDato) {
+      newTilDato = selectedDate;
+    }
+
     onDateRangeChange({
-      ...dateRange,
-      fraDato: newDate
+      fraDato: selectedDate,
+      tilDato: newTilDato
     });
   };
 
   const handleToDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newDate = e.target.value ? new Date(e.target.value) : null;
+    setShowValidationWarning(null);
+    
+    if (!e.target.value) {
+      onDateRangeChange({
+        ...dateRange,
+        tilDato: null
+      });
+      return;
+    }
+
+    const selectedDate = new Date(e.target.value);
+    const validation = isValidDate(selectedDate);
+    
+    if (!validation.valid) {
+      setShowValidationWarning(validation.message || 'Ugyldig dato');
+      // Tilbakestill input til forrige gyldig verdi eller dagens dato
+      setTimeout(() => {
+        e.target.value = formatDateForInput(dateRange.tilDato || today);
+      }, 100);
+      return;
+    }
+
+    // Sikre at fraDato ikke er etter den nye tilDato
+    let newFraDato = dateRange.fraDato;
+    if (newFraDato && selectedDate < newFraDato) {
+      newFraDato = selectedDate;
+    }
+
     onDateRangeChange({
-      ...dateRange,
-      tilDato: newDate
+      fraDato: newFraDato,
+      tilDato: selectedDate
     });
   };
 
@@ -236,6 +321,9 @@ function DateRangeSelector({ dateRange, onDateRangeChange, onResetDateFilter }: 
                 max={formatDateForInput(today)}
                 className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                Fra {kvasirApi.formatNorwegianDate(minimumDate)}
+              </span>
             </div>
             
             <div className="flex flex-col gap-1">
@@ -251,6 +339,9 @@ function DateRangeSelector({ dateRange, onDateRangeChange, onResetDateFilter }: 
                 max={formatDateForInput(today)}
                 className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                Til {kvasirApi.formatNorwegianDate(today)}
+              </span>
             </div>
           </div>
           
@@ -264,6 +355,20 @@ function DateRangeSelector({ dateRange, onDateRangeChange, onResetDateFilter }: 
           )}
         </div>
       </div>
+      
+      {/* Valideringsadvarsel */}
+      {showValidationWarning && (
+        <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-md">
+          <div className="flex items-start gap-2">
+            <svg className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+            </svg>
+            <span className="text-sm text-red-700 dark:text-red-200">
+              {showValidationWarning}
+            </span>
+          </div>
+        </div>
+      )}
       
       {hasActiveFilter && (
         <div className="mt-3 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded text-sm">
