@@ -391,9 +391,20 @@ function DateRangeSelector({ dateRange, onDateRangeChange, onResetDateFilter }: 
   );
 }
 
+
 export default function DataDisplay({ data, isLoading, error, dateRange, onDateRangeChange, onResetDateFilter }: DataDisplayProps) {
   const [showAllCandidates, setShowAllCandidates] = useState(false);
   const [expandedCandidate, setExpandedCandidate] = useState<string | null>(null);
+
+  // Sett default fraDato til 24. i måneden for minimumDate, og tilDato til dagens dato ved første last
+  useEffect(() => {
+    if (!dateRange.fraDato && !dateRange.tilDato) {
+      const min = kvasirApi.getMinimumDate();
+      const fraDato = new Date(min.getFullYear(), min.getMonth(), 24);
+      const tilDato = new Date();
+      onDateRangeChange({ fraDato, tilDato });
+    }
+  }, []);
 
   if (isLoading) {
     return (
