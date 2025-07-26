@@ -74,12 +74,8 @@ function ArticleWithSummary({ artikkel, index }: { artikkel: { lenke: string; sc
         const result = await kvasirApi.getSammendrag(artikkel.lenke);
         setSammendrag(result);
         setShowSammendrag(true);
-      } catch (error: unknown) {
-        if (error instanceof Error) {
-          setSammendragError(error.message);
-        } else {
-          setSammendragError('Kunne ikke hente sammendrag');
-        }
+      } catch (error) {
+        setSammendragError(error instanceof Error ? error.message : 'Kunne ikke hente sammendrag');
       } finally {
         setIsLoadingSammendrag(false);
       }
@@ -88,7 +84,7 @@ function ArticleWithSummary({ artikkel, index }: { artikkel: { lenke: string; sc
     }
   };
 
-  // Formaterer scraped dato (kun dato, ikke tid)
+  // Formaterer scraped dato
   const formatScrapedDate = (dateString: string) => {
     try {
       const date = new Date(dateString);
@@ -96,6 +92,8 @@ function ArticleWithSummary({ artikkel, index }: { artikkel: { lenke: string; sc
         day: '2-digit',
         month: '2-digit',
         year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
       });
     } catch {
       return dateString;
@@ -125,14 +123,8 @@ function ArticleWithSummary({ artikkel, index }: { artikkel: { lenke: string; sc
           </a>
           
           {/* Scraped dato */}
-          <div className="text-xs flex items-center gap-2">
-            <span
-              className="px-2 py-0.5 rounded-full bg-gradient-to-r from-blue-100 via-blue-50 to-blue-200 dark:from-blue-900/40 dark:via-blue-900/20 dark:to-blue-900/40 text-blue-800 dark:text-blue-200 font-semibold border border-blue-300 dark:border-blue-700 shadow-sm tracking-wide flex items-center gap-1"
-              title="Dato artikkelen ble hentet/skrapet"
-            >
-              <svg className="w-3.5 h-3.5 mr-1 text-blue-400 dark:text-blue-300" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-              {formatScrapedDate(artikkel.scraped)}
-            </span>
+          <div className="text-xs text-gray-500 dark:text-gray-400">
+            <span className="font-medium">Hentet:</span> {formatScrapedDate(artikkel.scraped)}
           </div>
           
           {/* Sammendrag-knapp */}
@@ -205,54 +197,34 @@ function DateRangeSelector({ dateRange, onDateRangeChange, onResetDateFilter }: 
   };
 
   const handleFromDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newFraDato = e.target.value ? new Date(e.target.value) : null;
-    let newTilDato = dateRange.tilDato;
-    // Hvis kun fraDato settes, sett tilDato til today hvis ikke satt
-    if (newFraDato && !dateRange.tilDato) {
-      newTilDato = today;
-    }
-    // Hvis fraDato fjernes, behold tilDato
-    if (!newFraDato && !dateRange.tilDato) {
-      newTilDato = null;
-    }
+    const newDate = e.target.value ? new Date(e.target.value) : null;
     onDateRangeChange({
       ...dateRange,
-      fraDato: newFraDato,
-      tilDato: newTilDato
+      fraDato: newDate
     });
   };
 
   const handleToDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newTilDato = e.target.value ? new Date(e.target.value) : null;
-    let newFraDato = dateRange.fraDato;
-    // Hvis kun tilDato settes, sett fraDato til minimumDate hvis ikke satt
-    if (newTilDato && !dateRange.fraDato) {
-      newFraDato = minimumDate;
-    }
-    // Hvis tilDato fjernes, behold fraDato
-    if (!newTilDato && !dateRange.fraDato) {
-      newFraDato = null;
-    }
+    const newDate = e.target.value ? new Date(e.target.value) : null;
     onDateRangeChange({
       ...dateRange,
-      fraDato: newFraDato,
-      tilDato: newTilDato
+      tilDato: newDate
     });
   };
 
   const hasActiveFilter = dateRange.fraDato || dateRange.tilDato;
 
   return (
-    <div className="bg-white dark:bg-gray-900 p-5 sm:p-7 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm mb-6 sm:mb-8">
+    <div className="bg-white dark:bg-gray-900 p-4 sm:p-6 rounded-lg border border-gray-200 dark:border-gray-700 mb-6 sm:mb-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <h3 className="text-lg sm:text-xl font-bold text-blue-700 dark:text-blue-200 flex items-center gap-2 mb-2 sm:mb-0">
-          <svg className="w-5 h-5 text-blue-400 dark:text-blue-300" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        <h3 className="text-base sm:text-lg font-semibold text-foreground">
           Filtrer etter dato
         </h3>
+        
         <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-start sm:items-center">
           <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 items-start sm:items-center">
             <div className="flex flex-col gap-1">
-              <label htmlFor="fraDato" className="text-xs font-semibold text-blue-700 dark:text-blue-200">
+              <label htmlFor="fraDato" className="text-xs font-medium text-gray-600 dark:text-gray-400">
                 Fra dato:
               </label>
               <input
@@ -262,11 +234,12 @@ function DateRangeSelector({ dateRange, onDateRangeChange, onResetDateFilter }: 
                 onChange={handleFromDateChange}
                 min={formatDateForInput(minimumDate)}
                 max={formatDateForInput(today)}
-                className="px-3 py-2 text-sm border border-blue-200 dark:border-blue-700 rounded-md bg-white dark:bg-gray-800 text-blue-900 dark:text-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent shadow-sm"
+                className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
+            
             <div className="flex flex-col gap-1">
-              <label htmlFor="tilDato" className="text-xs font-semibold text-blue-700 dark:text-blue-200">
+              <label htmlFor="tilDato" className="text-xs font-medium text-gray-600 dark:text-gray-400">
                 Til dato:
               </label>
               <input
@@ -276,20 +249,22 @@ function DateRangeSelector({ dateRange, onDateRangeChange, onResetDateFilter }: 
                 onChange={handleToDateChange}
                 min={formatDateForInput(dateRange.fraDato || minimumDate)}
                 max={formatDateForInput(today)}
-                className="px-3 py-2 text-sm border border-blue-200 dark:border-blue-700 rounded-md bg-white dark:bg-gray-800 text-blue-900 dark:text-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent shadow-sm"
+                className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
           </div>
+          
           {hasActiveFilter && (
             <button
               onClick={onResetDateFilter}
-              className="px-3 py-2 text-xs sm:text-sm font-semibold text-blue-700 dark:text-blue-200 bg-blue-100 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-md hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors shadow-sm"
+              className="px-3 py-2 text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
             >
               Tilbakestill
             </button>
           )}
         </div>
       </div>
+      
       {hasActiveFilter && (
         <div className="mt-3 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded text-sm">
           <span className="text-blue-700 dark:text-blue-300">
@@ -381,6 +356,13 @@ export default function DataDisplay({ data, isLoading, error, dateRange, onDateR
 
   return (
     <div className="py-6 sm:py-8 max-w-none xl:max-w-7xl 2xl:max-w-none">
+      {/* Datovelger øverst */}
+      <DateRangeSelector
+        dateRange={dateRange}
+        onDateRangeChange={onDateRangeChange}
+        onResetDateFilter={onResetDateFilter}
+      />
+
       <div className="mb-6 sm:mb-8">
         <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-foreground mb-2">
           {getSourceDisplayName(data.kilde)} - Kandidatanalyse
@@ -389,13 +371,6 @@ export default function DataDisplay({ data, isLoading, error, dateRange, onDateR
           Analyse av {data.totaltAntallArtikler} artikler med {data.allePersonernevnt.length} unike kandidater
         </p>
       </div>
-
-      {/* Datovelger under overskrift */}
-      <DateRangeSelector
-        dateRange={dateRange}
-        onDateRangeChange={onDateRangeChange}
-        onResetDateFilter={onResetDateFilter}
-      />
 
       {/* Hovedstatistikk */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
