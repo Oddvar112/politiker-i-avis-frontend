@@ -228,8 +228,8 @@ function DateRangeSelector({ dateRange, onDateRangeChange, onResetDateFilter }: 
 
 
   const handleFromDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setShowValidationWarning(null);
     if (!e.target.value) {
+      setShowValidationWarning(null);
       onDateRangeChange({
         ...dateRange,
         fraDato: null
@@ -239,12 +239,13 @@ function DateRangeSelector({ dateRange, onDateRangeChange, onResetDateFilter }: 
     const selectedDate = new Date(e.target.value);
     const validation = isValidDate(selectedDate);
     if (!validation.valid) {
-      // Ikke vis advarsel her, vises på blur
+      setShowValidationWarning(validation.message || 'Ugyldig dato');
       setTimeout(() => {
         e.target.value = formatDateForInput(dateRange.fraDato || minimumDate);
       }, 100);
       return;
     }
+    setShowValidationWarning(null);
     let newTilDato = dateRange.tilDato;
     if (newTilDato && selectedDate > newTilDato) {
       newTilDato = selectedDate;
@@ -268,8 +269,8 @@ function DateRangeSelector({ dateRange, onDateRangeChange, onResetDateFilter }: 
 
 
   const handleToDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setShowValidationWarning(null);
     if (!e.target.value) {
+      setShowValidationWarning(null);
       onDateRangeChange({
         ...dateRange,
         tilDato: null
@@ -279,12 +280,13 @@ function DateRangeSelector({ dateRange, onDateRangeChange, onResetDateFilter }: 
     const selectedDate = new Date(e.target.value);
     const validation = isValidDate(selectedDate);
     if (!validation.valid) {
-      // Ikke vis advarsel her, vises på blur
+      setShowValidationWarning(validation.message || 'Ugyldig dato');
       setTimeout(() => {
         e.target.value = formatDateForInput(dateRange.tilDato || today);
       }, 100);
       return;
     }
+    setShowValidationWarning(null);
     let newFraDato = dateRange.fraDato;
     if (newFraDato && selectedDate < newFraDato) {
       newFraDato = selectedDate;
