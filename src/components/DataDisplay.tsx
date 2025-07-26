@@ -1,5 +1,4 @@
-
-import { DataDTO, SammendragDTO } from "@/types/api";
+import { DataDTO, SammendragDTO, DateRange } from "@/types/api";
 import { useState, useEffect } from "react";
 import { kvasirApi } from "../services/kvasirApi";
 import React from "react";
@@ -8,16 +7,18 @@ interface DataDisplayProps {
   data: DataDTO | null;
   isLoading: boolean;
   error: string | null;
+  dateRange: DateRange;
+  onDateRangeChange: (dateRange: DateRange) => void;
+  onResetDateFilter: () => void;
 }
 
 interface ArticlePreviewProps {
   url: string;
   active: boolean;
-  priority: number; // Lavere tall = høyere prioritet
+  priority: number;
 }
 
 function ArticlePreview({ url }: { url: string }) {
-  // Minimal fallback: vis kun logo eller domenenavn
   const getDomainInfo = (url: string) => {
     try {
       const domain = new URL(url).hostname.toLowerCase();
@@ -52,8 +53,8 @@ function ArticlePreview({ url }: { url: string }) {
   );
 }
 
-// Ny komponent for en enkelartikkel med sammendrag-funksjonalitet
-function ArticleWithSummary({ link, index }: { link: string; index: number }) {
+// Oppdatert komponent for en artikel med scraped dato
+function ArticleWithSummary({ artikkel, index }: { artikkel: { lenke: string; scraped: string }; index: number }) {
   const [sammendrag, setSammendrag] = useState<SammendragDTO | null>(null);
   const [showSammendrag, setShowSammendrag] = useState(false);
   const [isLoadingSammendrag, setIsLoadingSammendrag] = useState(false);
@@ -70,16 +71,34 @@ function ArticleWithSummary({ link, index }: { link: string; index: number }) {
       setSammendragError(null);
       
       try {
-        const result = await kvasirApi.getSammendrag(link);
+        const result = await kvasirApi.getSammendrag(artikkel.lenke);
         setSammendrag(result);
         setShowSammendrag(true);
-      } catch (error) {
-        setSammendragError(error instanceof Error ? error.message : 'Kunne ikke hente sammendrag');
+      } catch (error: unknown) {
+        if (error instanceof Error) {
+          setSammendragError(error.message);
+        } else {
+          setSammendragError('Kunne ikke hente sammendrag');
+        }
       } finally {
         setIsLoadingSammendrag(false);
       }
     } else {
       setShowSammendrag(true);
+    }
+  };
+
+  // Formaterer scraped dato (kun dato, ikke tid)
+  const formatScrapedDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('no-NO', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      });
+    } catch {
+      return dateString;
     }
   };
 
@@ -91,19 +110,30 @@ function ArticleWithSummary({ link, index }: { link: string; index: number }) {
         </span>
         
         {/* Preview bilde til venstre */}
-        <ArticlePreview url={link} />
+        <ArticlePreview url={artikkel.lenke} />
         
         {/* Innhold og kontroller */}
         <div className="flex-1 min-w-0 space-y-2">
           {/* Artikkellenke */}
           <a
-            href={link}
+            href={artikkel.lenke}
             target="_blank"
             rel="noopener noreferrer"
             className="text-xs sm:text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline break-all block"
           >
-            {link}
+            {artikkel.lenke}
           </a>
+          
+          {/* Scraped dato */}
+          <div className="text-xs flex items-center gap-2">
+            <span
+              className="px-2 py-0.5 rounded-full bg-gradient-to-r from-blue-100 via-blue-50 to-blue-200 dark:from-blue-900/40 dark:via-blue-900/20 dark:to-blue-900/40 text-blue-800 dark:text-blue-200 font-semibold border border-blue-300 dark:border-blue-700 shadow-sm tracking-wide flex items-center gap-1"
+              title="Dato artikkelen ble hentet/skrapet"
+            >
+              <svg className="w-3.5 h-3.5 mr-1 text-blue-400 dark:text-blue-300" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+              {formatScrapedDate(artikkel.scraped)}
+            </span>
+          </div>
           
           {/* Sammendrag-knapp */}
           <button
@@ -160,7 +190,124 @@ function ArticleWithSummary({ link, index }: { link: string; index: number }) {
   );
 }
 
-export default function DataDisplay({ data, isLoading, error }: DataDisplayProps) {
+// Ny komponent for datovelger
+function DateRangeSelector({ dateRange, onDateRangeChange, onResetDateFilter }: {
+  dateRange: DateRange;
+  onDateRangeChange: (dateRange: DateRange) => void;
+  onResetDateFilter: () => void;
+}) {
+  const minimumDate = kvasirApi.getMinimumDate();
+  const today = new Date();
+
+  const formatDateForInput = (date: Date | null): string => {
+    if (!date) return '';
+    return date.toISOString().split('T')[0];
+  };
+
+  const handleFromDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newFraDato = e.target.value ? new Date(e.target.value) : null;
+    let newTilDato = dateRange.tilDato;
+    // Hvis kun fraDato settes, sett tilDato til today hvis ikke satt
+    if (newFraDato && !dateRange.tilDato) {
+      newTilDato = today;
+    }
+    // Hvis fraDato fjernes, behold tilDato
+    if (!newFraDato && !dateRange.tilDato) {
+      newTilDato = null;
+    }
+    onDateRangeChange({
+      ...dateRange,
+      fraDato: newFraDato,
+      tilDato: newTilDato
+    });
+  };
+
+  const handleToDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newTilDato = e.target.value ? new Date(e.target.value) : null;
+    let newFraDato = dateRange.fraDato;
+    // Hvis kun tilDato settes, sett fraDato til minimumDate hvis ikke satt
+    if (newTilDato && !dateRange.fraDato) {
+      newFraDato = minimumDate;
+    }
+    // Hvis tilDato fjernes, behold fraDato
+    if (!newTilDato && !dateRange.fraDato) {
+      newFraDato = null;
+    }
+    onDateRangeChange({
+      ...dateRange,
+      fraDato: newFraDato,
+      tilDato: newTilDato
+    });
+  };
+
+  const hasActiveFilter = dateRange.fraDato || dateRange.tilDato;
+
+  return (
+    <div className="bg-white dark:bg-gray-900 p-5 sm:p-7 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm mb-6 sm:mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <h3 className="text-lg sm:text-xl font-bold text-blue-700 dark:text-blue-200 flex items-center gap-2 mb-2 sm:mb-0">
+          <svg className="w-5 h-5 text-blue-400 dark:text-blue-300" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+          Filtrer etter dato
+        </h3>
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-start sm:items-center">
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 items-start sm:items-center">
+            <div className="flex flex-col gap-1">
+              <label htmlFor="fraDato" className="text-xs font-semibold text-blue-700 dark:text-blue-200">
+                Fra dato:
+              </label>
+              <input
+                id="fraDato"
+                type="date"
+                value={formatDateForInput(dateRange.fraDato)}
+                onChange={handleFromDateChange}
+                min={formatDateForInput(minimumDate)}
+                max={formatDateForInput(today)}
+                className="px-3 py-2 text-sm border border-blue-200 dark:border-blue-700 rounded-md bg-white dark:bg-gray-800 text-blue-900 dark:text-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent shadow-sm"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="tilDato" className="text-xs font-semibold text-blue-700 dark:text-blue-200">
+                Til dato:
+              </label>
+              <input
+                id="tilDato"
+                type="date"
+                value={formatDateForInput(dateRange.tilDato)}
+                onChange={handleToDateChange}
+                min={formatDateForInput(dateRange.fraDato || minimumDate)}
+                max={formatDateForInput(today)}
+                className="px-3 py-2 text-sm border border-blue-200 dark:border-blue-700 rounded-md bg-white dark:bg-gray-800 text-blue-900 dark:text-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent shadow-sm"
+              />
+            </div>
+          </div>
+          {hasActiveFilter && (
+            <button
+              onClick={onResetDateFilter}
+              className="px-3 py-2 text-xs sm:text-sm font-semibold text-blue-700 dark:text-blue-200 bg-blue-100 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-md hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors shadow-sm"
+            >
+              Tilbakestill
+            </button>
+          )}
+        </div>
+      </div>
+      {hasActiveFilter && (
+        <div className="mt-3 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded text-sm">
+          <span className="text-blue-700 dark:text-blue-300">
+            {dateRange.fraDato && dateRange.tilDato ? (
+              <>Viser data fra {kvasirApi.formatNorwegianDate(dateRange.fraDato)} til {kvasirApi.formatNorwegianDate(dateRange.tilDato)}</>
+            ) : dateRange.fraDato ? (
+              <>Viser data fra {kvasirApi.formatNorwegianDate(dateRange.fraDato)} og fremover</>
+            ) : dateRange.tilDato ? (
+              <>Viser data til og med {kvasirApi.formatNorwegianDate(dateRange.tilDato)}</>
+            ) : null}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function DataDisplay({ data, isLoading, error, dateRange, onDateRangeChange, onResetDateFilter }: DataDisplayProps) {
   const [showAllCandidates, setShowAllCandidates] = useState(false);
   const [expandedCandidate, setExpandedCandidate] = useState<string | null>(null);
 
@@ -242,6 +389,13 @@ export default function DataDisplay({ data, isLoading, error }: DataDisplayProps
           Analyse av {data.totaltAntallArtikler} artikler med {data.allePersonernevnt.length} unike kandidater
         </p>
       </div>
+
+      {/* Datovelger under overskrift */}
+      <DateRangeSelector
+        dateRange={dateRange}
+        onDateRangeChange={onDateRangeChange}
+        onResetDateFilter={onResetDateFilter}
+      />
 
       {/* Hovedstatistikk */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
@@ -359,10 +513,10 @@ export default function DataDisplay({ data, isLoading, error }: DataDisplayProps
                     Artikkellenker ({person.lenker.length}):
                   </h5>
                   <div className="space-y-3 max-h-64 sm:max-h-96 overflow-y-auto">
-                    {person.lenker.map((lenke, linkIndex) => (
+                    {person.lenker.map((artikkel, linkIndex) => (
                       <ArticleWithSummary 
                         key={linkIndex} 
-                        link={lenke} 
+                        artikkel={artikkel}
                         index={linkIndex} 
                       />
                     ))}
