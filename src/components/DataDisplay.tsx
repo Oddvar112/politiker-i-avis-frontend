@@ -91,9 +91,7 @@ function ArticleWithSummary({ artikkel, index }: { artikkel: { lenke: string; sc
       return date.toLocaleDateString('no-NO', {
         day: '2-digit',
         month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
+        year: 'numeric'
       });
     } catch {
       return dateString;
@@ -123,8 +121,14 @@ function ArticleWithSummary({ artikkel, index }: { artikkel: { lenke: string; sc
           </a>
           
           {/* Scraped dato */}
-          <div className="text-xs text-gray-500 dark:text-gray-400">
-            <span className="font-medium">Hentet:</span> {formatScrapedDate(artikkel.scraped)}
+          <div className="text-xs flex items-center gap-2 mt-1">
+            <span
+              className="px-2 py-0.5 rounded-full bg-gradient-to-r from-blue-100 via-blue-50 to-blue-200 dark:from-blue-900/40 dark:via-blue-900/20 dark:to-blue-900/40 text-blue-800 dark:text-blue-200 font-semibold border border-blue-300 dark:border-blue-700 shadow-sm tracking-wide flex items-center gap-1"
+              title="Dato artikkelen ble hentet/skrapet"
+            >
+              <svg className="w-3.5 h-3.5 mr-1 text-blue-400 dark:text-blue-300" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+              {formatScrapedDate(artikkel.scraped)}
+            </span>
           </div>
           
           {/* Sammendrag-knapp */}
@@ -319,7 +323,7 @@ function DateRangeSelector({ dateRange, onDateRangeChange, onResetDateFilter }: 
                 onChange={handleFromDateChange}
                 min={formatDateForInput(minimumDate)}
                 max={formatDateForInput(today)}
-                className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="px-3 py-2 text-sm border border-blue-600 dark:border-blue-400 rounded-full bg-white dark:bg-gray-800 text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
               />
               <span className="text-xs text-gray-500 dark:text-gray-400">
                 Fra {kvasirApi.formatNorwegianDate(minimumDate)}
@@ -337,7 +341,7 @@ function DateRangeSelector({ dateRange, onDateRangeChange, onResetDateFilter }: 
                 onChange={handleToDateChange}
                 min={formatDateForInput(dateRange.fraDato || minimumDate)}
                 max={formatDateForInput(today)}
-                className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="px-3 py-2 text-sm border border-blue-600 dark:border-blue-400 rounded-full bg-white dark:bg-gray-800 text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
               />
               <span className="text-xs text-gray-500 dark:text-gray-400">
                 Til {kvasirApi.formatNorwegianDate(today)}
@@ -461,12 +465,6 @@ export default function DataDisplay({ data, isLoading, error, dateRange, onDateR
 
   return (
     <div className="py-6 sm:py-8 max-w-none xl:max-w-7xl 2xl:max-w-none">
-      {/* Datovelger øverst */}
-      <DateRangeSelector
-        dateRange={dateRange}
-        onDateRangeChange={onDateRangeChange}
-        onResetDateFilter={onResetDateFilter}
-      />
 
       <div className="mb-6 sm:mb-8">
         <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-foreground mb-2">
@@ -475,6 +473,70 @@ export default function DataDisplay({ data, isLoading, error, dateRange, onDateR
         <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300">
           Analyse av {data.totaltAntallArtikler} artikler med {data.allePersonernevnt.length} unike kandidater
         </p>
+        {/* Dato badge under overskriften */}
+        {(dateRange.fraDato || dateRange.tilDato) && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            <span className="inline-block px-3 py-1 rounded-full bg-blue-600 text-white dark:bg-blue-400 dark:text-blue-900 text-xs font-semibold border border-blue-700 dark:border-blue-200 shadow">
+              {dateRange.fraDato && dateRange.tilDato
+                ? `Periode: ${kvasirApi.formatNorwegianDate(dateRange.fraDato)} - ${kvasirApi.formatNorwegianDate(dateRange.tilDato)}`
+                : dateRange.fraDato
+                ? `Fra: ${kvasirApi.formatNorwegianDate(dateRange.fraDato)}`
+                : dateRange.tilDato
+                ? `Til: ${kvasirApi.formatNorwegianDate(dateRange.tilDato)}`
+                : null}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Datovelger under overskriften, med visuell styling men beholdt input-bredde */}
+      <div className="mb-6 sm:mb-8">
+        <div className="bg-white dark:bg-gray-900 p-4 sm:p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
+          <h3 className="text-base sm:text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+            <svg className="w-5 h-5 text-blue-400 dark:text-blue-300" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+            Filtrer etter dato
+          </h3>
+          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+            <div className="flex flex-col sm:flex-row gap-3 w-full">
+              <div className="flex flex-col gap-1">
+                <label htmlFor="fraDato" className="text-xs font-medium text-gray-600 dark:text-gray-400">Fra dato:</label>
+                <input
+                  id="fraDato"
+                  type="date"
+                  value={dateRange.fraDato ? dateRange.fraDato.toISOString().split('T')[0] : ''}
+                  onChange={e => {
+                    const val = e.target.value ? new Date(e.target.value) : null;
+                    onDateRangeChange({ ...dateRange, fraDato: val });
+                  }}
+                  min={kvasirApi.getMinimumDate().toISOString().split('T')[0]}
+                  max={new Date().toISOString().split('T')[0]}
+                  className="px-3 py-2 text-sm border border-blue-300 dark:border-blue-600 rounded-md bg-white dark:bg-gray-800 text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <span className="text-xs text-gray-500 dark:text-gray-400">Fra {kvasirApi.formatNorwegianDate(kvasirApi.getMinimumDate())}</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label htmlFor="tilDato" className="text-xs font-medium text-gray-600 dark:text-gray-400">Til dato:</label>
+                <input
+                  id="tilDato"
+                  type="date"
+                  value={dateRange.tilDato ? dateRange.tilDato.toISOString().split('T')[0] : ''}
+                  onChange={e => {
+                    const val = e.target.value ? new Date(e.target.value) : null;
+                    onDateRangeChange({ ...dateRange, tilDato: val });
+                  }}
+                  min={dateRange.fraDato ? dateRange.fraDato.toISOString().split('T')[0] : kvasirApi.getMinimumDate().toISOString().split('T')[0]}
+                  max={new Date().toISOString().split('T')[0]}
+                  className="px-3 py-2 text-sm border border-blue-300 dark:border-blue-600 rounded-md bg-white dark:bg-gray-800 text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <span className="text-xs text-gray-500 dark:text-gray-400">Til {kvasirApi.formatNorwegianDate(new Date())}</span>
+              </div>
+            </div>
+            <button
+              onClick={onResetDateFilter}
+              className="px-3 py-2 text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors mt-2 sm:mt-0"
+            >Tilbakestill</button>
+          </div>
+        </div>
       </div>
 
       {/* Hovedstatistikk */}
