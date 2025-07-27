@@ -1,4 +1,3 @@
-
 import { DataDTO, SammendragDTO, DateRange } from "@/types/api";
 
 // Hjelpefunksjon for å få lokal dato i YYYY-MM-DD (samme som input type="date" forventer)
@@ -196,16 +195,15 @@ function ArticleWithSummary({ artikkel, index }: { artikkel: { lenke: string; sc
 }
 
 // Ny komponent for datovelger
-function DateRangeSelector({ dateRange, onDateRangeChange, onResetDateFilter }: {
+function DateRangeSelector({ dateRange, onDateRangeChange, onResetDateFilter, setShowValidationWarning }: {
   dateRange: DateRange;
   onDateRangeChange: (dateRange: DateRange) => void;
   onResetDateFilter: () => void;
+  setShowValidationWarning: (msg: string | null) => void;
 }) {
-
   // Sett standard verdier til min/max
   const minimumDate = kvasirApi.getMinimumDate();
   const today = new Date();
-  const [showValidationWarning, setShowValidationWarning] = useState<string | null>(null);
 
   const formatDateForInput = (date: Date | null): string => {
     if (!date) return '';
@@ -234,7 +232,6 @@ function DateRangeSelector({ dateRange, onDateRangeChange, onResetDateFilter }: 
 
   // Returnerer kun true/false for gyldig dato
   const isValid = (selectedDate: Date) => isValidDate(selectedDate).valid;
-
 
   const handleFromDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.value) {
@@ -275,7 +272,6 @@ function DateRangeSelector({ dateRange, onDateRangeChange, onResetDateFilter }: 
       setShowValidationWarning(null);
     }
   };
-
 
   const handleToDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.value) {
@@ -325,7 +321,6 @@ function DateRangeSelector({ dateRange, onDateRangeChange, onResetDateFilter }: 
         <h3 className="text-base sm:text-lg font-semibold text-foreground">
           Filtrer etter dato
         </h3>
-        
         <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-start sm:items-center">
           <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 items-start sm:items-center">
             <div className="flex flex-col gap-1">
@@ -346,7 +341,6 @@ function DateRangeSelector({ dateRange, onDateRangeChange, onResetDateFilter }: 
                 Fra {kvasirApi.formatNorwegianDate(minimumDate)}
               </span>
             </div>
-            
             <div className="flex flex-col gap-1">
               <label htmlFor="tilDato" className="text-xs font-medium text-gray-600 dark:text-gray-400">
                 Til dato:
@@ -366,7 +360,6 @@ function DateRangeSelector({ dateRange, onDateRangeChange, onResetDateFilter }: 
               </span>
             </div>
           </div>
-          
           {hasActiveFilter && (
             <button
               onClick={onResetDateFilter}
@@ -377,21 +370,6 @@ function DateRangeSelector({ dateRange, onDateRangeChange, onResetDateFilter }: 
           )}
         </div>
       </div>
-      
-      {/* Valideringsadvarsel */}
-      {showValidationWarning && (
-        <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-md">
-          <div className="flex items-start gap-2">
-            <svg className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"/>
-            </svg>
-            <span className="text-sm text-red-700 dark:text-red-200">
-              {showValidationWarning}
-            </span>
-          </div>
-        </div>
-      )}
-      
       {hasActiveFilter && (
         <div className="mt-3 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded text-sm">
           <span className="text-blue-700 dark:text-blue-300">
@@ -412,6 +390,7 @@ function DateRangeSelector({ dateRange, onDateRangeChange, onResetDateFilter }: 
 export default function DataDisplay({ data, isLoading, error, dateRange, onDateRangeChange, onResetDateFilter }: DataDisplayProps) {
   const [showAllCandidates, setShowAllCandidates] = useState(false);
   const [expandedCandidate, setExpandedCandidate] = useState<string | null>(null);
+  const [showValidationWarning, setShowValidationWarning] = useState<string | null>(null);
 
   // Sett default datoperiode på første last hvis ikke satt
   React.useEffect(() => {
@@ -495,7 +474,20 @@ export default function DataDisplay({ data, isLoading, error, dateRange, onDateR
 
   return (
     <div className="py-6 sm:py-8 max-w-none xl:max-w-7xl 2xl:max-w-none">
+      {/* Alert slide-down fra toppen */}
+      {showValidationWarning && (
+        <div className="fixed top-0 left-0 w-full z-50 flex justify-center animate-slideDown">
+          <div className="mt-4 px-6 py-3 bg-red-600 text-white rounded shadow-lg flex items-center gap-2 border border-red-800">
+            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+            </svg>
+            <span className="text-base font-medium">{showValidationWarning}</span>
+            <button onClick={() => setShowValidationWarning(null)} className="ml-4 text-white hover:text-red-200 text-lg font-bold">×</button>
+          </div>
+        </div>
+      )}
 
+      {/* Dynamisk overskrift */}
       <div className="mb-6 sm:mb-8">
         <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-foreground mb-2">
           {getSourceDisplayName(data.kilde)} - Kandidatanalyse
@@ -524,6 +516,7 @@ export default function DataDisplay({ data, isLoading, error, dateRange, onDateR
         dateRange={dateRange}
         onDateRangeChange={onDateRangeChange}
         onResetDateFilter={onResetDateFilter}
+        setShowValidationWarning={setShowValidationWarning}
       />
 
       {/* Hovedstatistikk */}
