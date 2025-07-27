@@ -1,3 +1,19 @@
+import { useEffect } from "react";
+  // Automatisk redirect ut av Messenger WebView
+  useEffect(() => {
+    const isMessenger = /FBAN|FBAV|Messenger/i.test(navigator.userAgent);
+    if (isMessenger && typeof window !== 'undefined') {
+      const currentUrl = window.location.href;
+      // For Android
+      if (/Android/i.test(navigator.userAgent)) {
+        window.location.href = `intent://${currentUrl.replace(/^https?:\/\//, '')}#Intent;scheme=https;package=com.android.chrome;end`;
+      }
+      // For iOS
+      else if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+        alert('Vennligst åpne denne siden i Safari for best opplevelse. Trykk på de tre prikkene øverst til høyre og velg "Åpne i Safari"');
+      }
+    }
+  }, []);
 "use client";
 import TopBar from "./TopBar";
 import Sidebar from "./Sidebar";
